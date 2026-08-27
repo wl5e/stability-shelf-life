@@ -1,109 +1,118 @@
-"""Tests for Arrhenius stability predictor model."""
+"""Tests for the statistical core (stability_shelf_life.model)."""
 
-import csv
 import math
 
 import pytest
 
-from arrhenius_stability.model import (
-    ArrheniusFit,
-    StabilityDataError,
-    TemperatureRate,
-    estimate_rate_constants,
+from stability_shelf_life.model import (
+    StabilityError,
+    degradation_rates_by_temperature,
+    estimate_shelf_life,
     fit_arrhenius,
-    load_data,
-    predict_shelf_life,
+    fit_kinetics,
+    linear_fit,
+    predict_arrhenius_rate,
+    t_critical,
 )
 
 
-def _write_csv(path, rows):
-    with open(path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(["temperature_c", "time_months", "potency"])
-        writer.writerows(rows)
+def test_linear_fit_recovers_known_line():
+    xs = [0.0, 1.0, 2.0, 3.0, 4.0]
+    ys = [3.0 + 2.0 * x for x in xs]
+    r = linear_fit(xs, ys)
+    assert r.slope == pytest.approx(2.0)
+    assert r.intercept == pytest.approx(3.0)
+    assert r.r_squared == pytest.approx(1.0)
+    assert r.residual_std_error == pytest.approx(0.0)
 
 
-def test_load_data_parses_valid_csv(tmp_path):
-    path = tmp_path / "data.csv"
-    _write_csv(path, [(40, 0, 100), (40, 1, 98), (50, 0, 100), (50, 1, 96)])
-    records = load_data(str(path))
-    assert len(records) == 4
-    assert records[0].temperature_c == 40.0
-    assert records[0].time_months == 0.0
-    assert records[0].potency == 100.0
+def test_linear_fit_requires_three_points():
+    with pytest.raises(StabilityError):
+        linear_fit([0.0, 1.0], [1.0, 2.0])
 
 
-def test_load_data_detects_missing_column(tmp_path):
-    path = tmp_path / "bad.csv"
-    path.write_text("temperature_c,time_months\n40,0\n", encoding="utf-8")
-    with pytest.raises(StabilityDataError, match="Missing CSV column"):
-        load_data(str(path))
+def test_t_critical_table_and_normal_approx():
+    assert t_critical(1) == pytest.approx(6.314)
+    assert t_critical(30) == pytest.approx(1.697)
+    assert t_critical(120) == pytest.approx(1.64485, abs=1e-4)
 
 
-def test_estimate_rate_constants_fits_first_order_rates(tmp_path):
-    rows = []
-    for temp, k in [(40.0, 0.01), (50.0, 0.02)]:
-        for time_months in [0, 1, 2, 3, 6]:
-            rows.append((temp, time_months, 100.0 * math.exp(-k * time_months)))
-    path = tmp_path / "data.csv"
-    _write_csv(path, rows)
-    rates = estimate_rate_constants(load_data(str(path)))
-    assert set(rates) == {40.0, 50.0}
-    assert rates[40.0].rate == pytest.approx(0.01, rel=0.005)
-    assert rates[50.0].rate == pytest.approx(0.02, rel=0.005)
-    assert rates[40.0].r_squared > 0.999
-    assert rates[50.0].r_squared > 0.999
+def test_first_order_kinetics_recovers_rate():
+    k_true = 0.01
+    times = [0.0, 3.0, 6.0, 9.0, 12.0]
+    values = [100.0 * math.exp(-k_true * t) for t in times]
+    fit = fit_kinetics(times, values, order=1)
+    assert fit.rate == pytest.approx(k_true, rel=0.01)
+    assert fit.initial == pytest.approx(100.0, rel=0.01)
+    assert fit.r_squared > 0.999
 
 
-def test_estimate_rate_constants_rejects_no_degradation(tmp_path):
-    rows = [
-        (40.0, 0, 100),
-        (40.0, 1, 100),
-        (40.0, 2, 100),
-        (50.0, 0, 100),
-        (50.0, 1, 100),
-        (50.0, 2, 100),
-    ]
-    path = tmp_path / "flat.csv"
-    _write_csv(path, rows)
-    with pytest.raises(StabilityDataError, match="no degradation"):
-        estimate_rate_constants(load_data(str(path)))
+def test_zero_order_kinetics_recovers_rate():
+    k_true = 0.5
+    times = [0.0, 3.0, 6.0, 9.0, 12.0]
+    values = [100.0 - k_true * t for t in times]
+    fit = fit_kinetics(times, values, order=0)
+    assert fit.rate == pytest.approx(k_true, rel=0.01)
+    assert fit.initial == pytest.approx(100.0, rel=0.01)
 
 
-def test_fit_arrhenius_returns_positive_activation_energy():
-    rates = {
-        40.0: TemperatureRate(40.0, rate=0.01, r_squared=1.0, n_points=3, intercept=math.log(100)),
-        50.0: TemperatureRate(50.0, rate=0.02, r_squared=1.0, n_points=3, intercept=math.log(100)),
-        60.0: TemperatureRate(60.0, rate=0.04, r_squared=1.0, n_points=3, intercept=math.log(100)),
-    }
-    fit = fit_arrhenius(rates)
+def test_kinetics_rejects_non_positive_values():
+    with pytest.raises(StabilityError, match="positive"):
+        fit_kinetics([0.0, 1.0, 2.0], [100.0, 0.0, 50.0], order=1)
+
+
+def test_shelf_life_point_estimate_and_lower_bound():
+    k_true = 0.0045
+    times = [0.0, 3.0, 6.0, 9.0, 12.0, 18.0, 24.0]
+    # Small assay noise so the residual error is non-zero (the realistic case).
+    noise = [0.0, 0.15, -0.10, 0.05, -0.20, 0.10, -0.05]
+    values = [100.0 * math.exp(-k_true * t) + n for t, n in zip(times, noise)]
+    fit = fit_kinetics(times, values, order=1)
+    shelf = estimate_shelf_life(fit, limit=90.0)
+
+    point_expected = math.log(100.0 / 90.0) / k_true
+    assert shelf.point_estimate_months == pytest.approx(point_expected, rel=0.02)
+    # Uncertainty must shorten the shelf life, not lengthen it.
+    assert shelf.lower_bound_months > 0
+    assert shelf.lower_bound_months < shelf.point_estimate_months
+    assert shelf.stable is True
+
+
+def test_shelf_life_stable_flag_when_no_degradation():
+    times = [0.0, 3.0, 6.0]
+    values = [100.0, 100.0, 100.0]
+    fit = fit_kinetics(times, values, order=1)
+    shelf = estimate_shelf_life(fit, limit=90.0)
+    assert shelf.stable is False
+    assert shelf.point_estimate_months == math.inf
+
+
+def test_arrhenius_fit_and_prediction():
+    # Rates at 40/50/60 C, doubling per 10 C (activation energy consistent).
+    temps = [40.0, 50.0, 60.0]
+    rates = [0.01, 0.02, 0.04]
+    fit = fit_arrhenius(temps, rates)
     assert fit.activation_energy_kj_mol > 0
     assert fit.r_squared > 0.99
-    assert fit.pre_exponential_factor > 0
+
+    k_25 = predict_arrhenius_rate(fit, 25.0)
+    # Extrapolation below the measured range must give a smaller rate.
+    assert 0 < k_25 < rates[0]
 
 
-def test_predict_shelf_life_returns_positive_values():
-    fit = ArrheniusFit(
-        slope=-8000.0,
-        intercept=20.0,
-        r_squared=0.999,
-        activation_energy_kj_mol=66.5,
-        pre_exponential_factor=math.exp(20.0),
-        temperature_c_values=[40.0, 50.0],
-    )
-    rate, months = predict_shelf_life(fit, storage_temp_c=25.0)
-    assert rate > 0
-    assert months > 0
+def test_arrhenius_rejects_non_physical_slope():
+    with pytest.raises(StabilityError, match="non-physical"):
+        fit_arrhenius([40.0, 50.0, 60.0], [0.04, 0.02, 0.01])
 
 
-def test_predict_shelf_life_rejects_invalid_limit():
-    fit = ArrheniusFit(
-        slope=-8000.0,
-        intercept=20.0,
-        r_squared=0.999,
-        activation_energy_kj_mol=66.5,
-        pre_exponential_factor=math.exp(20.0),
-        temperature_c_values=[40.0, 50.0],
-    )
-    with pytest.raises(StabilityDataError, match="Initial potency"):
-        predict_shelf_life(fit, storage_temp_c=25.0, limit=100.0, initial_potency=100.0)
+def test_degradation_rates_by_temperature():
+    temps = [40.0, 40.0, 40.0, 50.0, 50.0, 50.0]
+    times = [0.0, 3.0, 6.0, 0.0, 3.0, 6.0]
+    values = [
+        100.0, 100 * math.exp(-0.01 * 3), 100 * math.exp(-0.01 * 6),
+        100.0, 100 * math.exp(-0.02 * 3), 100 * math.exp(-0.02 * 6),
+    ]
+    fits = degradation_rates_by_temperature(times, temps, values)
+    assert set(fits) == {40.0, 50.0}
+    assert fits[40.0].rate == pytest.approx(0.01, rel=0.01)
+    assert fits[50.0].rate == pytest.approx(0.02, rel=0.01)

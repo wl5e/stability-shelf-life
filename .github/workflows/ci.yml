@@ -13,13 +13,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
       - name: Install dependencies
-        run: |
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - name: Compile Python files
-        run: |
-          python -m py_compile $(find . -name "*.py")
-      - name: Run tests
-        run: |
-          PYTHONPATH=. pytest tests/ -v
+        run: pip install -r requirements.txt
+      - name: Compile
+        run: python -m py_compile $(find . -name "*.py")
+      - name: Tests
+        run: PYTHONPATH=. pytest tests/ -v
+      - name: Smoke test (Q1E)
+        run: PYTHONPATH=. python main.py q1e --input examples/stability_data.csv --limit 90
+      - name: Smoke test (Arrhenius)
+        run: PYTHONPATH=. python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25
