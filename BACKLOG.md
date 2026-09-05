@@ -15,7 +15,7 @@ Keep entries concrete: what changes, and why it matters for GMP/ICH work.
 
 ## Planned (need a handler)
 
-- [ ] `bootstrap_confidence` Bootstrap BCa lower bound for the shelf life as a robustness check against the analytic bound. | handler:
+- [x] `bootstrap_confidence` Bootstrap BCa lower bound for the shelf life as a robustness check against the analytic bound. | handler:
 - [ ] `pooled_batches` Pool batches that share a common slope (ICH Q1E batch pooling) with an ANCOVA test. | handler:
 - [ ] `arrhenius_extrapolation_guard` Warn when the storage temperature falls outside the measured range. | handler:
 - [ ] `json_report_file` Add `--out FILE` to persist the JSON report (GMP audit-trail artifact). | handler:
