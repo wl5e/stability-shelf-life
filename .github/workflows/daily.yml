@@ -1,0 +1,32 @@
+name: daily-contribution
+
+on:
+  schedule:
+    - cron: "37 5 * * *" # 05:37 UTC daily
+  workflow_dispatch: # manual trigger for testing
+
+permissions:
+  contents: write
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Daily increment (applies, tests, commits only if green)
+        run: python scripts/daily.py
+        env:
+          # Authoring: the noreply email makes these commits count on the
+          # contribution graph under the wl5e account.
+          GIT_AUTHOR_NAME: Collins Amatu Gorgerat
+          GIT_AUTHOR_EMAIL: 133529715+wl5e@users.noreply.github.com
+          GIT_COMMITTER_NAME: Collins Amatu Gorgerat
+          GIT_COMMITTER_EMAIL: 133529715+wl5e@users.noreply.github.com
