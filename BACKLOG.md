@@ -9,7 +9,7 @@ Keep entries concrete: what changes, and why it matters for GMP/ICH work.
 
 ## Ready (implemented handlers)
 
-- [ ] `reject_nonfinite_inputs` Reject NaN/Inf in CSV loaders so bad data cannot corrupt a fit. | handler: reject_nonfinite_inputs
+- [x] `reject_nonfinite_inputs` Reject NaN/Inf in CSV loaders so bad data cannot corrupt a fit. | handler: reject_nonfinite_inputs
 - [ ] `cli_end_to_end_test` Add the first end-to-end tests covering the CLI (q1e + arrhenius). | handler: cli_end_to_end_test
 - [ ] `readme_worked_example` Add a worked example with real numbers to the README. | handler: readme_worked_example
 

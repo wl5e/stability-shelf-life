@@ -52,3 +52,23 @@ def test_load_accelerated_data(tmp_path):
     data = load_accelerated_data(str(p))
     assert len(data.times) == 6
     assert set(data.temperatures) == {40.0, 50.0}
+
+
+def test_load_stability_data_rejects_non_finite(tmp_path):
+    p = tmp_path / "nan.csv"
+    p.write_text(
+        "time_months,assay_percent,batch_id\n0,100,A01\n3,nan,A01\n6,97,A01\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(StabilityError, match="non-finite"):
+        load_stability_data(str(p))
+
+
+def test_load_accelerated_data_rejects_non_finite(tmp_path):
+    p = tmp_path / "inf.csv"
+    p.write_text(
+        "temperature_c,time_months,potency\n40,0,100\n50,3,inf\n60,6,80\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(StabilityError, match="non-finite"):
+        load_accelerated_data(str(p))

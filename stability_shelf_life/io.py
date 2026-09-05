@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import math
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -67,6 +68,8 @@ def load_stability_data(path: str) -> Dict[str, StabilityBatch]:
             batch_id = (row["batch_id"] or "").strip()
             if not batch_id:
                 raise StabilityError(f"{path} row {row_num}: empty batch_id")
+            if not (math.isfinite(t) and math.isfinite(v)):
+                raise StabilityError(f"{path} row {row_num}: non-finite time or assay value")
             if t < 0:
                 raise StabilityError(f"{path} row {row_num}: negative time")
             if v <= 0:
@@ -112,8 +115,12 @@ def load_accelerated_data(path: str) -> AcceleratedData:
                     f"{path} row {row_num}: non-numeric value"
                 ) from exc
 
+            if not math.isfinite(temp):
+                raise StabilityError(f"{path} row {row_num}: non-finite temperature")
             if temp <= -273.15:
                 raise StabilityError(f"{path} row {row_num}: temperature below absolute zero")
+            if not (math.isfinite(t) and math.isfinite(v)):
+                raise StabilityError(f"{path} row {row_num}: non-finite time or assay value")
             if t < 0:
                 raise StabilityError(f"{path} row {row_num}: negative time")
             if v <= 0:
