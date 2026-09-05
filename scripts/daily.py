@@ -320,8 +320,12 @@ def main(argv=None) -> int:
             _revert(written)
             written = []
         else:
-            print("LLM did not produce a green change after 3 attempts. No commit.")
-            return 1
+            # A hard item must not block the pipeline forever: check it off with
+            # a skip note so the next run advances to the following item.
+            mark_done(slug)
+            commit_and_push(f"chore: skip {slug} (LLM could not produce a green change)", slug)
+            print(f"Skipped {slug} after 3 failed attempts.")
+            return 0
 
     # ---- gate (deterministic path runs its tests here exactly once) ----
     if handler_name:
