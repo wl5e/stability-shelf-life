@@ -120,6 +120,27 @@ Setting `LCL(t)` equal to the (log-transformed) limit gives a quadratic in
 result is therefore always *more conservative* than the naive point
 estimate, as a regulated expiry date should be.
 
+## Worked example
+
+Run the ICH Q1E analysis on the bundled two-batch study:
+
+```bash
+python main.py q1e --input examples/stability_data.csv --limit 90
+```
+
+Batch **A01** fits best as **first-order** (k = 0.004532 /month, R² = 0.9993),
+giving a shelf life of **23.24 months** with a one-sided 95% lower confidence
+bound of **22.89 months**. Batch **B02** degrades slightly faster
+(k = 0.005059 /month) and reaches the 90% limit at **20.43 months**
+(lower bound **20.37 months**). Because ICH Q1E requires the *lower bound*,
+the reportable shelf life is the shorter of the two bounds.
+
+Accelerated data extrapolate to long-term storage with the Arrhenius model:
+
+```bash
+python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25
+```
+
 ## Tests
 
 ```bash
