@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """Daily, backlog-driven increment for stability-shelf-life.
 
-Reads the first not-yet-done item in ``BACKLOG.md`` that has an implemented
-handler, applies the handler, runs the full test suite, and — only if every
-test is green — checks the item off and commits. A commit is therefore *only*
-made when the change is real and verified; there is no filler.
+Reads the first not-yet-done item in ``BACKLOG.md``, implements it, runs the
+full test suite, and — only if every test is green — checks the item off and
+commits. A commit is therefore *only* made when the change is real and
+verified; there is no filler.
+
+Each item is implemented in one of two ways:
+
+* **Deterministic handler** — an item whose backlog line names a ``handler:``
+  function below. Fast, free, fully predictable.
+* **LLM provider** — when the item has no handler and ``DEEPSEEK_API_KEY`` is
+  set, the change is produced by DeepSeek (see ``llm.py``) and gated by the
+  same test suite, with up to three fix-up attempts.
 
 The "relevance" of the stream is guaranteed by the backlog: it is a human-
-curated list of real, well-scoped improvements. Each item is implemented by a
-handler function below. Items in the backlog without a handler are planned
-next steps (to be given a handler, or produced by an LLM provider later).
+curated list of real, well-scoped improvements.
 
 Modes:
     --dry-run   print the plan without touching anything
@@ -31,7 +37,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BACKLOG = ROOT / "BACKLOG.md"
 
-_ITEM_RE = re.compile(r"^- \[ \] `([^`]+)`.*?handler: (\w*)\s*$")
+_ITEM_RE = re.compile(r"^- \[ \] `([^`]+)` (.*?)\s*\|\s*handler:\s*(\w*)\s*$")
 
 
 def _replace(path: Path, old: str, new: str, count: int = 1) -> None:
@@ -208,12 +214,12 @@ HANDLERS = {
 # Engine
 # --------------------------------------------------------------------------- #
 
-def next_item() -> tuple[str, str] | None:
-    """Return ``(slug, handler_name)`` of the first undone item with a handler."""
+def next_item():
+    """Return ``(slug, title, handler_name)`` of the first undone item."""
     for line in BACKLOG.read_text(encoding="utf-8").splitlines():
         m = _ITEM_RE.match(line)
-        if m and m.group(2):
-            return m.group(1), m.group(2)
+        if m:
+            return m.group(1), m.group(2), m.group(3)
     return None
 
 
@@ -227,10 +233,22 @@ def mark_done(slug: str) -> None:
     BACKLOG.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def run_tests() -> bool:
+def run_tests():
     env = {**os.environ, "PYTHONPATH": str(ROOT)}
-    res = _run([sys.executable, "-m", "pytest", "-q"], env=env)
-    return res.returncode == 0
+    return _run([sys.executable, "-m", "pytest", "-q"], env=env)
+
+
+def _revert(written) -> None:
+    """Undo an implementation. Precise for LLM items, whole-tree otherwise."""
+    if written:
+        for rel, existed in written:
+            p = ROOT / rel
+            if existed:
+                _run(["git", "checkout", "--", rel])
+            elif p.exists():
+                p.unlink()
+    else:
+        _run(["git", "checkout", "--", "."])
 
 
 def commit_and_push(subject: str, slug: str) -> None:
@@ -255,24 +273,63 @@ def main(argv=None) -> int:
 
     item = next_item()
     if item is None:
-        print("No undone backlog item with an implemented handler. Nothing to do.")
+        print("No undone backlog item. Nothing to do.")
         return 0
 
-    slug, handler_name = item
-    print(f"Selected backlog item: {slug} (handler: {handler_name})")
+    slug, title, handler_name = item
+    print(f"Selected backlog item: {slug}")
 
     if args.dry_run:
-        print("Dry run — no changes made.")
+        if handler_name:
+            mode = f"deterministic handler ({handler_name})"
+        elif os.environ.get("DEEPSEEK_API_KEY"):
+            mode = "LLM (DeepSeek)"
+        else:
+            mode = "none (no handler, no DEEPSEEK_API_KEY)"
+        print(f"Dry run — would implement via: {mode}. No changes made.")
         return 0
 
-    handler = HANDLERS[handler_name]
-    subject = handler()
+    written = []
+    subject = ""
 
-    print("Running test suite...")
-    if not run_tests():
-        print("Tests FAILED — nothing committed. Reverting working tree.")
-        _run(["git", "checkout", "--", "."])
-        return 1
+    # ---- implement ----
+    if handler_name:
+        subject = HANDLERS[handler_name]()
+    else:
+        if not os.environ.get("DEEPSEEK_API_KEY"):
+            print("Item has no handler and DEEPSEEK_API_KEY is not set; nothing to do.")
+            return 0
+        import llm
+        feedback = None
+        for attempt in (1, 2, 3):
+            try:
+                subject, written = llm.implement(slug, title, feedback)
+            except Exception as exc:  # noqa: BLE001 - fail the day cleanly
+                print(f"LLM attempt {attempt} raised: {exc}")
+                _revert(written)
+                return 1
+            if not _run(["git", "diff", "--stat"]).stdout.strip():
+                print("LLM produced no effective change; skipping (no commit).")
+                _revert(written)
+                return 1
+            res = run_tests()
+            if res.returncode == 0:
+                break
+            print(f"Attempt {attempt}: tests failed; feeding output back and retrying.")
+            feedback = res.stdout + res.stderr
+            _revert(written)
+            written = []
+        else:
+            print("LLM did not produce a green change after 3 attempts. No commit.")
+            return 1
+
+    # ---- gate (deterministic path runs its tests here exactly once) ----
+    if handler_name:
+        res = run_tests()
+        if res.returncode != 0:
+            print("Tests FAILED — nothing committed. Reverting working tree.")
+            _revert(written)
+            return 1
 
     mark_done(slug)
     if args.apply:
