@@ -136,3 +136,38 @@ def implement(slug: str, description: str, feedback: str | None = None) -> Tuple
         written.append((rel, existed))
 
     return result.get("summary") or f"feat: {slug}", written
+
+
+PROPOSE_PROMPT = (
+    "You are the maintainer of `stability-shelf-life`, a pure-stdlib tool for "
+    "pharmaceutical stability modelling (ICH Q1E + Arrhenius). Propose NEW "
+    "backlog items that would genuinely improve it for GMP/ICH use.\n"
+    "Requirements:\n"
+    "- Propose 10 items, each concrete and implementable in ONE focused change.\n"
+    "- Do NOT duplicate anything already in the backlog or already in the code.\n"
+    "- No trivial filler (comment edits, renames, cosmetic tweaks).\n"
+    "- Slugs are kebab-case.\n"
+    '- Return ONLY JSON: {"items": [{"slug": "...", "title": "...", "why": "..."}]}'
+)
+
+
+def propose_items(count: int = 10):
+    """Ask DeepSeek for ``count`` new backlog items, as (slug, title, why)."""
+    context = _gather_context()
+    backlog = (ROOT / "BACKLOG.md").read_text(encoding="utf-8")
+    user = (
+        "Current repository files:\n\n" + context
+        + "\n\nCurrent backlog (do not duplicate):\n\n" + backlog
+    )
+    content = _call(
+        [
+            {"role": "system", "content": PROPOSE_PROMPT},
+            {"role": "user", "content": user},
+        ]
+    )
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"DeepSeek returned invalid JSON: {exc}") from exc
+    items = data.get("items") or []
+    return [(it["slug"], it["title"], it.get("why", "")) for it in items]

@@ -1,0 +1,35 @@
+name: replenish-backlog
+
+on:
+  schedule:
+    # Monday 11:40 UTC — DeepSeek off-peak (see daily.yml for the window).
+    - cron: "40 11 * * 1"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Propose items even if the backlog is not low"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  replenish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Propose backlog items if low
+        run: python scripts/replenish.py ${{ github.event.inputs.force == 'true' && '--force' || '' }}
+        env:
+          GIT_AUTHOR_NAME: Collins Amatu Gorgerat
+          GIT_AUTHOR_EMAIL: 133529715+wl5e@users.noreply.github.com
+          GIT_COMMITTER_NAME: Collins Amatu Gorgerat
+          GIT_COMMITTER_EMAIL: 133529715+wl5e@users.noreply.github.com
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
