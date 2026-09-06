@@ -24,12 +24,17 @@ from .model import (
     fit_kinetics,
     predict_arrhenius_rate,
 )
+from .pooling import (
+    PooledBatchResult,
+    pool_batches,
+)
 
 __version__ = '2.0.0'
 
 __all__ = [
     'ArrheniusFit',
     'KineticFit',
+    'PooledBatchResult',
     'ShelfLife',
     'StabilityError',
     'bootstrap_shelf_life_bca',
@@ -37,6 +42,7 @@ __all__ = [
     'estimate_shelf_life',
     'fit_arrhenius',
     'fit_kinetics',
+    'pool_batches',
     'predict_arrhenius_rate',
     'load_accelerated_data',
     'load_stability_data',
