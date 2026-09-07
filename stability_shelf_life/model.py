@@ -24,6 +24,7 @@ approximated by the standard-normal quantile beyond that.
 from __future__ import annotations
 
 import math
+import warnings
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Sequence
@@ -274,9 +275,25 @@ def fit_arrhenius(
 
 
 def predict_arrhenius_rate(fit: ArrheniusFit, storage_temp_c: float) -> float:
-    """Predict the first-order degradation rate at a storage temperature."""
+    """Predict the first-order degradation rate at a storage temperature.
+
+    If ``storage_temp_c`` falls outside the temperature range used to fit
+    ``fit``, a :class:`UserWarning` is emitted because the prediction is an
+    extrapolation rather than an interpolation.
+    """
     if storage_temp_c <= -273.15:
         raise StabilityError("storage temperature is below absolute zero")
+    if fit.temperatures_c:
+        measured_min_c = min(fit.temperatures_c)
+        measured_max_c = max(fit.temperatures_c)
+        if storage_temp_c < measured_min_c or storage_temp_c > measured_max_c:
+            warnings.warn(
+                f"storage temperature {storage_temp_c:.2f} C is outside the "
+                f"measured temperature range [{measured_min_c:.2f}, "
+                f"{measured_max_c:.2f}] C; Arrhenius prediction is an extrapolation",
+                UserWarning,
+                stacklevel=2,
+            )
     ln_rate = fit.intercept + fit.slope * (1.0 / (storage_temp_c + 273.15))
     rate = math.exp(ln_rate)
     if rate <= 0:

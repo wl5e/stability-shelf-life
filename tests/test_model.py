@@ -95,7 +95,8 @@ def test_arrhenius_fit_and_prediction():
     assert fit.activation_energy_kj_mol > 0
     assert fit.r_squared > 0.99
 
-    k_25 = predict_arrhenius_rate(fit, 25.0)
+    with pytest.warns(UserWarning, match="outside the measured"):
+        k_25 = predict_arrhenius_rate(fit, 25.0)
     # Extrapolation below the measured range must give a smaller rate.
     assert 0 < k_25 < rates[0]
 
