@@ -32,6 +32,17 @@ from stability_shelf_life import (
 )
 
 
+def _write_json_report(report, output_path: str) -> None:
+    """Persist the JSON report to *output_path* (GMP audit-trail artifact)."""
+    try:
+        with open(output_path, "w", encoding="utf-8") as handle:
+            json.dump(report, handle, indent=2)
+    except OSError as exc:
+        raise StabilityError(
+            f"could not write report file {output_path}: {exc}"
+        ) from exc
+
+
 def _select_model(fits):
     """Choose the best model by R²; prefer first-order on a tie."""
     zero, first = fits[0], fits[1]
@@ -79,6 +90,9 @@ def _run_q1e(args) -> int:
             )
         report["batches"].append(entry)
 
+    if args.out:
+        _write_json_report(report, args.out)
+
     if args.json:
         print(json.dumps(report, indent=2))
     else:
@@ -124,36 +138,36 @@ def _run_arrhenius(args) -> int:
         else None
     )
 
+    report = {
+        "rates": [
+            {
+                "temperature_c": t,
+                "rate_1_per_month": rates_by_temp[t].rate,
+                "r_squared": round(rates_by_temp[t].r_squared, 5),
+            }
+            for t in temps
+        ],
+        "arrhenius": {
+            "activation_energy_kj_mol": round(
+                fit.activation_energy_kj_mol, 2
+            ),
+            "pre_exponential_factor": fit.pre_exponential_factor,
+            "r_squared": round(fit.r_squared, 5),
+        },
+        "prediction": {
+            "storage_temperature_c": args.storage_temp,
+            "rate_1_per_month": k_storage,
+            "shelf_life_months": (
+                round(shelf_months, 2) if shelf_months is not None else None
+            ),
+        },
+    }
+
+    if args.out:
+        _write_json_report(report, args.out)
+
     if args.json:
-        print(
-            json.dumps(
-                {
-                    "rates": [
-                        {
-                            "temperature_c": t,
-                            "rate_1_per_month": rates_by_temp[t].rate,
-                            "r_squared": round(rates_by_temp[t].r_squared, 5),
-                        }
-                        for t in temps
-                    ],
-                    "arrhenius": {
-                        "activation_energy_kj_mol": round(
-                            fit.activation_energy_kj_mol, 2
-                        ),
-                        "pre_exponential_factor": fit.pre_exponential_factor,
-                        "r_squared": round(fit.r_squared, 5),
-                    },
-                    "prediction": {
-                        "storage_temperature_c": args.storage_temp,
-                        "rate_1_per_month": k_storage,
-                        "shelf_life_months": (
-                            round(shelf_months, 2) if shelf_months is not None else None
-                        ),
-                    },
-                },
-                indent=2,
-            )
-        )
+        print(json.dumps(report, indent=2))
     else:
         print("Arrhenius stability extrapolation")
         print("Temperature  Rate (1/month)  R²")
@@ -187,6 +201,7 @@ def _build_parser() -> argparse.ArgumentParser:
     q1e.add_argument("--input", required=True, help="CSV: time_months,assay_percent,batch_id")
     q1e.add_argument("--limit", type=float, required=True, help="acceptance criterion (percent)")
     q1e.add_argument("--json", action="store_true", help="emit JSON")
+    q1e.add_argument("--out", metavar="FILE", help="write JSON report to FILE")
 
     arr = sub.add_parser("arrhenius", help="Arrhenius extrapolation of accelerated data")
     arr.add_argument("--input", required=True, help="CSV: temperature_c,time_months,potency")
@@ -194,6 +209,7 @@ def _build_parser() -> argparse.ArgumentParser:
     arr.add_argument("--limit", type=float, default=90.0, help="acceptance criterion (percent)")
     arr.add_argument("--initial-potency", type=float, default=100.0, help="initial potency (percent)")
     arr.add_argument("--json", action="store_true", help="emit JSON")
+    arr.add_argument("--out", metavar="FILE", help="write JSON report to FILE")
     return parser
 
 
