@@ -21,7 +21,7 @@ Keep entries concrete: what changes, and why it matters for GMP/ICH work.
 - [x] `pooled_batches` Pool batches that share a common slope (ICH Q1E batch pooling) with an ANCOVA test. | handler:
 - [x] `arrhenius_extrapolation_guard` Warn when the storage temperature falls outside the measured range. | handler:
 - [x] `json_report_file` Add `--out FILE` to persist the JSON report (GMP audit-trail artifact). | handler:
-- [ ] `csv_encoding_bom` Accept UTF-8 with BOM in CSV inputs. | handler:
+- [x] `csv_encoding_bom` Accept UTF-8 with BOM in CSV inputs. | handler:
 - [ ] `slope_difference_test` Report a statistical test for slope differences between batches. | handler:
 - [ ] `outlier_diagnostic` Flag high-leverage / studentized-residual outliers in the fit. | handler:
 - [ ] `html_report` Emit a standalone HTML report of the stability analysis. | handler:

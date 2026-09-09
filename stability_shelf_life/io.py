@@ -31,7 +31,7 @@ def _open_csv(path: str):
     if not data_file.exists():
         raise StabilityError(f"data file not found: {path}")
     try:
-        handle = data_file.open("r", encoding="utf-8", newline="")
+        handle = data_file.open("r", encoding="utf-8-sig", newline="")
     except OSError as exc:
         raise StabilityError(f"could not open data file: {exc}") from exc
     return handle
