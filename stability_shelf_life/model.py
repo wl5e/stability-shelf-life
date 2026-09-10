@@ -1,6 +1,6 @@
 """Statistical core of pharmaceutical stability modelling.
 
-Three capabilities are provided:
+Four capabilities are provided:
 
 1. **Kinetic fitting** — zero-order (linear in potency) and first-order
    (linear in ln potency) degradation, following ICH Q1E.
@@ -11,7 +11,11 @@ Three capabilities are provided:
    limit of the fitted line with the acceptance criterion, solved exactly
    (a quadratic in time).
 
-3. **Arrhenius extrapolation** — fits ``ln(k) = ln(A) - Ea/(R*T)`` to
+3. **Batch comparison** — an extra-sum-of-squares F test for equality of
+   the degradation slopes of several batches, which ICH Q1E requires
+   before the data of different batches may be pooled.
+
+4. **Arrhenius extrapolation** — fits ``ln(k) = ln(A) - Ea/(R*T)`` to
    degradation rates measured at several elevated temperatures, then
    predicts the rate (and shelf life) at a chosen long-term storage
    temperature.
@@ -84,6 +88,20 @@ class ShelfLife:
 
 
 @dataclass(frozen=True)
+class SlopeDifference:
+    """F test for equality of degradation slopes across several batches."""
+
+    order: int
+    slopes: List[float]      # per-batch regression slopes (model scale)
+    rates: List[float]       # per-batch degradation rates (positive)
+    f_statistic: float
+    df_between: int
+    df_within: int
+    p_value: float
+    slopes_differ: bool      # True when p_value < alpha
+
+
+@dataclass(frozen=True)
 class ArrheniusFit:
     """Arrhenius ``ln(k) = ln(A) - Ea/(R*T)`` fitted to several temperatures."""
 
@@ -100,6 +118,75 @@ def t_critical(df: int) -> float:
     if df < 1:
         raise ValueError("degrees of freedom must be >= 1")
     return _T_CRITICAL_TABLE.get(df, _NORMAL_QUANTILE_95)
+
+
+def _beta_continued_fraction(a: float, b: float, x: float) -> float:
+    """Continued-fraction expansion of the incomplete beta (Lentz's method)."""
+    max_iterations = 200
+    epsilon = 3.0e-14
+    tiny = 1.0e-300
+
+    qab = a + b
+    qap = a + 1.0
+    qam = a - 1.0
+
+    c = 1.0
+    d = 1.0 - qab * x / qap
+    if abs(d) < tiny:
+        d = tiny
+    d = 1.0 / d
+    h = d
+
+    for m in range(1, max_iterations + 1):
+        m2 = 2 * m
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        if abs(d) < tiny:
+            d = tiny
+        c = 1.0 + aa / c
+        if abs(c) < tiny:
+            c = tiny
+        d = 1.0 / d
+        h *= d * c
+
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        if abs(d) < tiny:
+            d = tiny
+        c = 1.0 + aa / c
+        if abs(c) < tiny:
+            c = tiny
+        d = 1.0 / d
+        delta = d * c
+        h *= delta
+        if abs(delta - 1.0) < epsilon:
+            break
+    return h
+
+
+def regularized_incomplete_beta(a: float, b: float, x: float) -> float:
+    """Regularized incomplete beta function ``I_x(a, b)``."""
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    log_beta = math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
+    front = math.exp(log_beta + a * math.log(x) + b * math.log1p(-x))
+    if x < (a + 1.0) / (a + b + 2.0):
+        return front * _beta_continued_fraction(a, b, x) / a
+    return 1.0 - front * _beta_continued_fraction(b, a, 1.0 - x) / b
+
+
+def f_test_p_value(f_statistic: float, df_between: int, df_within: int) -> float:
+    """Upper-tail probability ``P(F > f_statistic)`` of an F distribution."""
+    if df_between < 1 or df_within < 1:
+        raise ValueError("degrees of freedom must be >= 1")
+    if f_statistic <= 0.0:
+        return 1.0
+    if math.isinf(f_statistic):
+        return 0.0
+    x = df_within / (df_within + df_between * f_statistic)
+    return regularized_incomplete_beta(0.5 * df_within, 0.5 * df_between, x)
 
 
 def linear_fit(xs: Sequence[float], ys: Sequence[float]) -> RegressionResult:
@@ -236,6 +323,70 @@ def estimate_shelf_life(fit: KineticFit, limit: float) -> ShelfLife:
         lower_bound_months=lower,
         limit=limit,
         stable=True,
+    )
+
+
+def slope_difference_test(
+    fits: Sequence[KineticFit], alpha: float = 0.05
+) -> SlopeDifference:
+    """Test whether the degradation slopes of several batches are equal.
+
+    An extra-sum-of-squares F test compares a model with one slope per batch
+    against a model with a single common slope.  ICH Q1E only allows the
+    data of different batches to be pooled when their slopes do not differ
+    significantly.
+
+    ``fits`` must contain at least two :class:`KineticFit` objects fitted
+    with the same kinetic order.  The statistic has ``k - 1`` and ``N - 2k``
+    degrees of freedom for ``k`` batches and ``N`` observations in total.
+    """
+    k = len(fits)
+    if k < 2:
+        raise StabilityError("at least two batches are required to compare slopes")
+    if len({fit.order for fit in fits}) != 1:
+        raise StabilityError("all batches must be fitted with the same kinetic model")
+
+    total_n = sum(fit.regression.n for fit in fits)
+    df_between = k - 1
+    df_within = total_n - 2 * k
+    if df_within < 1:
+        raise StabilityError("not enough observations to test slope differences")
+
+    ss_separate = sum(
+        fit.regression.residual_std_error ** 2 * (fit.regression.n - 2)
+        for fit in fits
+    )
+    sxx_total = sum(fit.regression.sxx for fit in fits)
+    common_slope = (
+        sum(fit.regression.sxx * fit.regression.slope for fit in fits) / sxx_total
+    )
+    ss_common = ss_separate + sum(
+        fit.regression.sxx * (fit.regression.slope - common_slope) ** 2
+        for fit in fits
+    )
+    ss_difference = max(ss_common - ss_separate, 0.0)
+
+    slopes = [fit.regression.slope for fit in fits]
+
+    if ss_separate <= 0.0:
+        # Perfect within-batch fits: the slopes either coincide or they do not.
+        differ = ss_difference > 0.0
+        f_statistic = math.inf if differ else 0.0
+        p_value = 0.0 if differ else 1.0
+    else:
+        f_statistic = (ss_difference / df_between) / (ss_separate / df_within)
+        p_value = f_test_p_value(f_statistic, df_between, df_within)
+        differ = p_value < alpha
+
+    return SlopeDifference(
+        order=fits[0].order,
+        slopes=slopes,
+        rates=[-slope for slope in slopes],
+        f_statistic=f_statistic,
+        df_between=df_between,
+        df_within=df_within,
+        p_value=p_value,
+        slopes_differ=differ,
     )
 
 

@@ -22,7 +22,7 @@ Keep entries concrete: what changes, and why it matters for GMP/ICH work.
 - [x] `arrhenius_extrapolation_guard` Warn when the storage temperature falls outside the measured range. | handler:
 - [x] `json_report_file` Add `--out FILE` to persist the JSON report (GMP audit-trail artifact). | handler:
 - [x] `csv_encoding_bom` Accept UTF-8 with BOM in CSV inputs. | handler:
-- [ ] `slope_difference_test` Report a statistical test for slope differences between batches. | handler:
+- [x] `slope_difference_test` Report a statistical test for slope differences between batches. | handler:
 - [ ] `outlier_diagnostic` Flag high-leverage / studentized-residual outliers in the fit. | handler:
 - [ ] `html_report` Emit a standalone HTML report of the stability analysis. | handler:
 - [ ] `pyproject_packaging` Add `pyproject.toml` so the package is pip-installable. | handler:

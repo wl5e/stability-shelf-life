@@ -3,7 +3,8 @@
 Two subcommands are provided:
 
     q1e       — ICH Q1E shelf-life estimation (zero/first-order kinetics,
-                one-sided 95% lower confidence bound, per batch).
+                one-sided 95% lower confidence bound, per batch) together
+                with an F test for slope differences between batches.
     arrhenius — Arrhenius extrapolation of accelerated-stability data to a
                 chosen long-term storage temperature.
 
@@ -30,6 +31,7 @@ from stability_shelf_life import (
     load_stability_data,
     predict_arrhenius_rate,
 )
+from stability_shelf_life.model import SlopeDifference, slope_difference_test
 
 
 def _write_json_report(report, output_path: str) -> None:
@@ -51,11 +53,35 @@ def _select_model(fits):
     return zero, "zero-order"
 
 
+def _slope_difference_entry(
+    order: int, batch_ids: Sequence[str], comparison: SlopeDifference
+) -> dict:
+    """Serialise an F test for equal slopes between batches."""
+    return {
+        "model": "zero-order" if order == 0 else "first-order",
+        "batch_ids": list(batch_ids),
+        "rates": [round(rate, 6) for rate in comparison.rates],
+        "rate_unit": "percent/month" if order == 0 else "1/month",
+        "f_statistic": (
+            round(comparison.f_statistic, 4)
+            if math.isfinite(comparison.f_statistic)
+            else None
+        ),
+        "df_between": comparison.df_between,
+        "df_within": comparison.df_within,
+        "p_value": round(comparison.p_value, 5),
+        "slopes_differ": comparison.slopes_differ,
+    }
+
+
 def _run_q1e(args) -> int:
     batches = load_stability_data(args.input)
     limit = args.limit
 
-    report = {"limit": limit, "batches": []}
+    report = {"limit": limit, "batches": [], "slope_difference": []}
+    fits_by_order = {0: [], 1: []}
+    ids_by_order = {0: [], 1: []}
+
     for batch_id in sorted(batches):
         batch = batches[batch_id]
         fits = [fit_kinetics(batch.times, batch.values, o) for o in (0, 1)]
@@ -78,6 +104,8 @@ def _run_q1e(args) -> int:
             entry["shelf_life_lower_95_months"] = round(shelf.lower_bound_months, 2)
 
         for fit in fits:
+            fits_by_order[fit.order].append(fit)
+            ids_by_order[fit.order].append(batch_id)
             name = "zero-order" if fit.order == 0 else "first-order"
             entry["models"].append(
                 {
@@ -89,6 +117,15 @@ def _run_q1e(args) -> int:
                 }
             )
         report["batches"].append(entry)
+
+    for order in (0, 1):
+        order_fits = fits_by_order[order]
+        if len(order_fits) < 2:
+            continue
+        comparison = slope_difference_test(order_fits)
+        report["slope_difference"].append(
+            _slope_difference_entry(order, ids_by_order[order], comparison)
+        )
 
     if args.out:
         _write_json_report(report, args.out)
@@ -119,6 +156,27 @@ def _print_q1e_report(report) -> None:
                 f"  -> best model: {entry['best_model']}, "
                 f"shelf life = {entry['shelf_life_months']} months "
                 f"(95% lower bound {entry['shelf_life_lower_95_months']} months)"
+            )
+        print()
+
+    slope_tests = report.get("slope_difference") or []
+    if slope_tests:
+        print("Slope comparison between batches (extra-sum-of-squares F test)")
+        for entry in slope_tests:
+            f_text = (
+                "inf"
+                if entry["f_statistic"] is None
+                else f"{entry['f_statistic']:.3f}"
+            )
+            verdict = (
+                "differ significantly"
+                if entry["slopes_differ"]
+                else "do not differ significantly"
+            )
+            print(
+                f"  {entry['model']:>11}: F({entry['df_between']}, "
+                f"{entry['df_within']}) = {f_text}, p = {entry['p_value']:.4f}"
+                f" -> slopes {verdict}"
             )
         print()
 

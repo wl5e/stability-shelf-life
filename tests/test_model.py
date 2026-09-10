@@ -8,10 +8,13 @@ from stability_shelf_life.model import (
     StabilityError,
     degradation_rates_by_temperature,
     estimate_shelf_life,
+    f_test_p_value,
     fit_arrhenius,
     fit_kinetics,
     linear_fit,
     predict_arrhenius_rate,
+    regularized_incomplete_beta,
+    slope_difference_test,
     t_critical,
 )
 
@@ -117,3 +120,66 @@ def test_degradation_rates_by_temperature():
     assert set(fits) == {40.0, 50.0}
     assert fits[40.0].rate == pytest.approx(0.01, rel=0.01)
     assert fits[50.0].rate == pytest.approx(0.02, rel=0.01)
+
+
+def test_regularized_incomplete_beta_and_f_tail():
+    # I_x(a, a) is 0.5 at x = 0.5 by symmetry.
+    assert regularized_incomplete_beta(2.5, 2.5, 0.5) == pytest.approx(0.5, abs=1e-9)
+    assert f_test_p_value(1.0, 1, 1) == pytest.approx(0.5, abs=1e-6)
+    assert f_test_p_value(1.0, 5, 5) == pytest.approx(0.5, abs=1e-6)
+    # Upper tail of F(1, 1) at 5.05 equals 2 * P(T_1 > sqrt(5.05)) ~ 0.2665.
+    assert f_test_p_value(5.05, 1, 1) == pytest.approx(0.2665, abs=1e-3)
+    assert f_test_p_value(0.0, 3, 10) == 1.0
+
+
+def test_slope_difference_test_does_not_flag_equal_slopes():
+    times = [0.0, 3.0, 6.0, 9.0, 12.0]
+    noise = [0.0, 0.15, -0.10, 0.05, -0.20]
+    k_true = 0.01
+    batch_a = [100.0 * math.exp(-k_true * t) + n for t, n in zip(times, noise)]
+    batch_b = [
+        100.0 * math.exp(-k_true * t) + n for t, n in zip(times, reversed(noise))
+    ]
+    comparison = slope_difference_test(
+        [
+            fit_kinetics(times, batch_a, order=1),
+            fit_kinetics(times, batch_b, order=1),
+        ]
+    )
+    assert comparison.order == 1
+    assert comparison.df_between == 1
+    assert comparison.df_within == 6  # 2 batches * (5 - 2)
+    assert comparison.slopes_differ is False
+    assert comparison.p_value > 0.05
+
+
+def test_slope_difference_test_detects_different_slopes():
+    times = [0.0, 3.0, 6.0, 9.0, 12.0]
+    noise = [0.0, 0.15, -0.10, 0.05, -0.20]
+    fast = [100.0 * math.exp(-0.03 * t) + n for t, n in zip(times, noise)]
+    slow = [
+        100.0 * math.exp(-0.005 * t) + n for t, n in zip(times, reversed(noise))
+    ]
+    comparison = slope_difference_test(
+        [
+            fit_kinetics(times, fast, order=1),
+            fit_kinetics(times, slow, order=1),
+        ]
+    )
+    assert comparison.slopes_differ is True
+    assert comparison.p_value < 0.05
+    assert comparison.f_statistic > 1.0
+    # The faster-degrading batch has the larger positive rate.
+    assert comparison.rates[0] > comparison.rates[1]
+
+
+def test_slope_difference_test_validates_inputs():
+    times = [0.0, 3.0, 6.0, 9.0]
+    values = [100.0 * math.exp(-0.01 * t) for t in times]
+    first_order = fit_kinetics(times, values, order=1)
+    zero_order = fit_kinetics(times, values, order=0)
+
+    with pytest.raises(StabilityError, match="at least two"):
+        slope_difference_test([first_order])
+    with pytest.raises(StabilityError, match="same kinetic model"):
+        slope_difference_test([first_order, zero_order])
