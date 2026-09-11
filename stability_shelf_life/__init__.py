@@ -16,12 +16,14 @@ from .io import (
 from .model import (
     ArrheniusFit,
     KineticFit,
+    OutlierDiagnostic,
     ShelfLife,
     StabilityError,
     degradation_rates_by_temperature,
     estimate_shelf_life,
     fit_arrhenius,
     fit_kinetics,
+    outlier_diagnostic,
     predict_arrhenius_rate,
 )
 from .pooling import (
@@ -34,6 +36,7 @@ __version__ = '2.0.0'
 __all__ = [
     'ArrheniusFit',
     'KineticFit',
+    'OutlierDiagnostic',
     'PooledBatchResult',
     'ShelfLife',
     'StabilityError',
@@ -42,6 +45,7 @@ __all__ = [
     'estimate_shelf_life',
     'fit_arrhenius',
     'fit_kinetics',
+    'outlier_diagnostic',
     'pool_batches',
     'predict_arrhenius_rate',
     'load_accelerated_data',

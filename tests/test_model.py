@@ -12,6 +12,7 @@ from stability_shelf_life.model import (
     fit_arrhenius,
     fit_kinetics,
     linear_fit,
+    outlier_diagnostic,
     predict_arrhenius_rate,
     regularized_incomplete_beta,
     slope_difference_test,
@@ -183,3 +184,45 @@ def test_slope_difference_test_validates_inputs():
         slope_difference_test([first_order])
     with pytest.raises(StabilityError, match="same kinetic model"):
         slope_difference_test([first_order, zero_order])
+
+
+def test_outlier_diagnostic_flags_studentized_residual():
+    xs = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    ys = [10.1, 9.9, 10.2, 9.8, 10.0, 14.0]
+    reg = linear_fit(xs, ys)
+    diag = outlier_diagnostic(reg, xs, ys)
+    assert diag.is_outlier == [False, False, False, False, False, True]
+    assert abs(diag.studentized_residuals[-1]) > 2.5
+    assert len(diag.residuals) == len(xs)
+    assert len(diag.leverage) == len(xs)
+
+
+def test_outlier_diagnostic_flags_high_leverage_point():
+    xs = [float(x) for x in range(10)] + [100.0]
+    ys = [2.0 * x + 1.0 for x in range(10)] + [201.0]
+    reg = linear_fit(xs, ys)
+    diag = outlier_diagnostic(reg, xs, ys)
+    assert diag.leverage[-1] > diag.leverage_cutoff
+    assert diag.is_outlier[-1] is True
+
+
+def test_outlier_diagnostic_clean_data_has_no_flags():
+    xs = [float(x) for x in range(10)]
+    ys = [3.0 + 2.0 * x for x in xs]
+    reg = linear_fit(xs, ys)
+    diag = outlier_diagnostic(reg, xs, ys)
+    assert not any(diag.is_outlier)
+
+
+def test_outlier_diagnostic_validates_inputs():
+    xs = [0.0, 1.0, 2.0, 3.0, 4.0]
+    ys = [2.0 * x + 1.0 for x in xs]
+    reg = linear_fit(xs, ys)
+    with pytest.raises(ValueError, match="same length"):
+        outlier_diagnostic(reg, xs, ys[:-1])
+    with pytest.raises(StabilityError, match="at least 4"):
+        outlier_diagnostic(
+            linear_fit([0.0, 1.0, 2.0], [1.0, 2.0, 3.0]),
+            [0.0, 1.0, 2.0],
+            [1.0, 2.0, 3.0],
+        )

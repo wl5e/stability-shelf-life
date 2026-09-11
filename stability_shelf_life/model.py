@@ -1,6 +1,6 @@
 """Statistical core of pharmaceutical stability modelling.
 
-Four capabilities are provided:
+Five capabilities are provided:
 
 1. **Kinetic fitting** — zero-order (linear in potency) and first-order
    (linear in ln potency) degradation, following ICH Q1E.
@@ -19,6 +19,9 @@ Four capabilities are provided:
    degradation rates measured at several elevated temperatures, then
    predicts the rate (and shelf life) at a chosen long-term storage
    temperature.
+
+5. **Outlier diagnostics** — leverage and externally studentized residuals
+   that flag observations exerting undue influence on a fitted model.
 
 The module uses only the Python standard library.  The one-sided 95%
 t-critical values are tabulated for 1..30 degrees of freedom and
@@ -479,3 +482,89 @@ def degradation_rates_by_temperature(
             )
         fits[temp] = fit
     return fits
+
+
+@dataclass(frozen=True)
+class OutlierDiagnostic:
+    """Per-observation regression diagnostics for outlier detection.
+
+    ``studentized_residuals`` holds the externally studentized ("deleted")
+    residuals and ``leverage`` the diagonal of the hat matrix.  An
+    observation is flagged when its studentized residual exceeds
+    ``threshold`` in absolute value or its leverage exceeds
+    ``leverage_cutoff``.
+    """
+
+    residuals: List[float]
+    leverage: List[float]
+    studentized_residuals: List[float]
+    is_outlier: List[bool]
+    threshold: float
+    leverage_cutoff: float
+
+
+def outlier_diagnostic(
+    regression: RegressionResult,
+    xs: Sequence[float],
+    ys: Sequence[float],
+    threshold: float = 2.5,
+) -> OutlierDiagnostic:
+    """Flag high-leverage and studentized-residual outliers in a fit.
+
+    ``xs`` and ``ys`` must be the data used to produce ``regression``.
+    Leverage is the diagonal of the hat matrix,
+    ``h_i = 1/n + (x_i - x_mean)^2 / sxx``.  The externally studentized
+    (deleted) residual is ``e_i / (s_i * sqrt(1 - h_i))``, where ``s_i`` is
+    the residual standard error of the fit with observation ``i`` removed.
+
+    A point is flagged when ``abs(studentized residual) > threshold`` or
+    when its leverage exceeds the conventional ``2p/n`` cut-off for ``p = 2``
+    regression parameters.
+    """
+    n = len(xs)
+    if n != len(ys):
+        raise ValueError("xs and ys must have the same length")
+    if n != regression.n:
+        raise ValueError("xs/ys length does not match the regression")
+    if n < 4:
+        raise StabilityError(
+            "at least 4 points are required for outlier diagnostics"
+        )
+
+    residuals = [
+        y - (regression.intercept + regression.slope * x)
+        for x, y in zip(xs, ys)
+    ]
+    leverage = [
+        1.0 / n + (x - regression.x_mean) ** 2 / regression.sxx for x in xs
+    ]
+    sse = sum(r * r for r in residuals)
+    deleted_df = n - 3  # n observations minus 2 parameters minus the deleted point
+
+    studentized: List[float] = []
+    for r, h in zip(residuals, leverage):
+        if h >= 1.0:
+            studentized.append(0.0 if r == 0.0 else math.copysign(math.inf, r))
+            continue
+        sse_deleted = sse - r * r / (1.0 - h)
+        if sse_deleted <= 0.0:
+            # Removing the point leaves a perfect fit: it is an extreme outlier.
+            studentized.append(0.0 if r == 0.0 else math.copysign(math.inf, r))
+            continue
+        s_deleted = math.sqrt(sse_deleted / deleted_df)
+        studentized.append(r / (s_deleted * math.sqrt(1.0 - h)))
+
+    leverage_cutoff = 2.0 * 2.0 / n
+    is_outlier = [
+        abs(sr) > threshold or h > leverage_cutoff
+        for sr, h in zip(studentized, leverage)
+    ]
+
+    return OutlierDiagnostic(
+        residuals=residuals,
+        leverage=leverage,
+        studentized_residuals=studentized,
+        is_outlier=is_outlier,
+        threshold=threshold,
+        leverage_cutoff=leverage_cutoff,
+    )
