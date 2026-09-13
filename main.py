@@ -32,6 +32,7 @@ from stability_shelf_life import (
     predict_arrhenius_rate,
 )
 from stability_shelf_life.model import SlopeDifference, slope_difference_test
+from stability_shelf_life.report import render_html_report
 
 
 def _write_json_report(report, output_path: str) -> None:
@@ -42,6 +43,17 @@ def _write_json_report(report, output_path: str) -> None:
     except OSError as exc:
         raise StabilityError(
             f"could not write report file {output_path}: {exc}"
+        ) from exc
+
+
+def _write_text_report(content: str, output_path: str, label: str) -> None:
+    """Persist a text artefact (e.g. a standalone HTML report) to disk."""
+    try:
+        with open(output_path, "w", encoding="utf-8") as handle:
+            handle.write(content)
+    except OSError as exc:
+        raise StabilityError(
+            f"could not write {label} file {output_path}: {exc}"
         ) from exc
 
 
@@ -129,6 +141,11 @@ def _run_q1e(args) -> int:
 
     if args.out:
         _write_json_report(report, args.out)
+
+    if args.html:
+        _write_text_report(
+            render_html_report(report), args.html, "HTML report"
+        )
 
     if args.json:
         print(json.dumps(report, indent=2))
@@ -224,6 +241,11 @@ def _run_arrhenius(args) -> int:
     if args.out:
         _write_json_report(report, args.out)
 
+    if args.html:
+        _write_text_report(
+            render_html_report(report), args.html, "HTML report"
+        )
+
     if args.json:
         print(json.dumps(report, indent=2))
     else:
@@ -260,6 +282,7 @@ def _build_parser() -> argparse.ArgumentParser:
     q1e.add_argument("--limit", type=float, required=True, help="acceptance criterion (percent)")
     q1e.add_argument("--json", action="store_true", help="emit JSON")
     q1e.add_argument("--out", metavar="FILE", help="write JSON report to FILE")
+    q1e.add_argument("--html", metavar="FILE", help="write standalone HTML report to FILE")
 
     arr = sub.add_parser("arrhenius", help="Arrhenius extrapolation of accelerated data")
     arr.add_argument("--input", required=True, help="CSV: temperature_c,time_months,potency")
@@ -268,6 +291,7 @@ def _build_parser() -> argparse.ArgumentParser:
     arr.add_argument("--initial-potency", type=float, default=100.0, help="initial potency (percent)")
     arr.add_argument("--json", action="store_true", help="emit JSON")
     arr.add_argument("--out", metavar="FILE", help="write JSON report to FILE")
+    arr.add_argument("--html", metavar="FILE", help="write standalone HTML report to FILE")
     return parser
 
 
