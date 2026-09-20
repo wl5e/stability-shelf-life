@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -90,6 +91,34 @@ def _call(messages) -> str:
     return data["choices"][0]["message"]["content"]
 
 
+def _extract_json(content: str) -> dict:
+    """Parse the JSON object DeepSeek returned.
+
+    Despite ``response_format: json_object`` the model sometimes wraps the
+    object in a markdown fence or appends trailing prose / a second object,
+    which breaks a naive ``json.loads``. Parse the *first* complete JSON object
+    and ignore anything around or after it.
+    """
+    text = content.strip()
+    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.DOTALL)
+    if fence:
+        text = fence.group(1).strip()
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    else:
+        if isinstance(obj, dict):
+            return obj
+    start = text.find("{")
+    if start == -1:
+        raise RuntimeError(f"DeepSeek returned no JSON object: {content[:200]!r}")
+    obj, _ = json.JSONDecoder().raw_decode(text[start:])
+    if not isinstance(obj, dict):
+        raise RuntimeError(f"DeepSeek returned a non-object JSON value: {content[:200]!r}")
+    return obj
+
+
 def implement(slug: str, description: str, feedback: str | None = None) -> Tuple[str, List[Tuple[str, bool]]]:
     """Implement one item via DeepSeek.
 
@@ -114,10 +143,7 @@ def implement(slug: str, description: str, feedback: str | None = None) -> Tuple
             {"role": "user", "content": user},
         ]
     )
-    try:
-        result = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"DeepSeek returned invalid JSON: {exc}") from exc
+    result = _extract_json(content)
 
     files = result.get("files") or {}
     if not files:
@@ -165,9 +191,6 @@ def propose_items(count: int = 10):
             {"role": "user", "content": user},
         ]
     )
-    try:
-        data = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"DeepSeek returned invalid JSON: {exc}") from exc
+    data = _extract_json(content)
     items = data.get("items") or []
     return [(it["slug"], it["title"], it.get("why", "")) for it in items]

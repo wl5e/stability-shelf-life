@@ -308,7 +308,10 @@ def main(argv=None) -> int:
                 print(f"LLM attempt {attempt} raised: {exc}")
                 _revert(written)
                 return 1
-            if not _run(["git", "diff", "--stat"]).stdout.strip():
+            # `git diff` ignores untracked files, so a change that only *adds* a
+            # new file (e.g. pyproject.toml) would look like "no change". Use
+            # `git status --porcelain` to catch created, modified and untracked.
+            if not _run(["git", "status", "--porcelain"]).stdout.strip():
                 print("LLM produced no effective change; skipping (no commit).")
                 _revert(written)
                 return 1
