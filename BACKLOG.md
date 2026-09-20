@@ -25,7 +25,7 @@ Keep entries concrete: what changes, and why it matters for GMP/ICH work.
 - [x] `slope_difference_test` Report a statistical test for slope differences between batches. | handler:
 - [x] `outlier_diagnostic` Flag high-leverage / studentized-residual outliers in the fit. | handler:
 - [x] `html_report` Emit a standalone HTML report of the stability analysis. | handler:
-- [ ] `pyproject_packaging` Add `pyproject.toml` so the package is pip-installable. | handler:
+- [x] `pyproject_packaging` Add `pyproject.toml` so the package is pip-installable. | handler:
 - [ ] `ci_matrix` Expand CI across Python 3.10–3.13. | handler:
 - [ ] `two_sided_ci` Report the two-sided 95% CI for the degradation rate alongside the one-sided bound. | handler:
 - [ ] `aic_model_selection` Replace the R² tie-break with AIC/BIC for zero- vs first-order selection. | handler:
