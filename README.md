@@ -48,8 +48,20 @@ Requires Python 3.9+.
 ```bash
 git clone https://github.com/wl5e/stability-shelf-life.git
 cd stability-shelf-life
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt   # only pytest, for development
+pip install .
+```
+
+This installs the `stability-shelf-life` command:
+
+```bash
+stability-shelf-life q1e --input examples/stability_data.csv --limit 90
+```
+
+For development, install the test extra and run pytest:
+
+```bash
+pip install -e ".[test]"
+pytest
 ```
 
 ## Usage
