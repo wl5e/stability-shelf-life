@@ -14,6 +14,12 @@ Each item is implemented in one of two ways:
   set, the change is produced by DeepSeek (see ``llm.py``) and gated by the
   same test suite, with up to three fix-up attempts.
 
+A change that stays green is additionally reviewed by a **JEV pertinence gate**
+(see ``jev.py``) when ``TYPESAFE_API_KEY`` is set: JEV scores whether the change
+is a genuine, well-scoped implementation rather than slop, and a confident
+rejection sends the item back for another attempt. The gate fails open if JEV
+is unreachable, so an outage never blocks the daily stream.
+
 The "relevance" of the stream is guaranteed by the backlog: it is a human-
 curated list of real, well-scoped improvements.
 
@@ -265,6 +271,38 @@ def commit_and_push(subject: str, slug: str) -> None:
     _run(["git", "push"])
 
 
+def _diff_for(written) -> str:
+    """Compact before/after of the files in ``written`` (list of ``(rel, existed)``)."""
+    rels = [rel for rel, _ in written]
+    parts = []
+    diff = _run(["git", "diff", "--", *rels]).stdout
+    if diff.strip():
+        parts.append(diff)
+    for rel, existed in written:
+        if not existed:
+            parts.append(f"### NEW FILE {rel}\n" + (ROOT / rel).read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
+
+def _jev_gate(slug: str, title: str, written) -> str:
+    """Return ``'accept'`` or ``'reject'`` from the JEV pertinence gate.
+
+    Opt-in: skipped when ``TYPESAFE_API_KEY`` is unset. Fails open — if JEV
+    errors, the change is accepted so an outage never blocks the daily stream.
+    """
+    if not os.environ.get("TYPESAFE_API_KEY"):
+        print("TYPESAFE_API_KEY not set; skipping JEV pertinence gate.")
+        return "accept"
+    import jev
+    try:
+        accepted, prob = jev.is_pertinent(slug, title, _diff_for(written))
+    except Exception as exc:  # noqa: BLE001 - fail open on gate outage
+        print(f"JEV gate unavailable ({exc}); accepting change.")
+        return "accept"
+    print(f"JEV pertinence: {prob:.2f} -> {'accept' if accepted else 'reject'}")
+    return "accept" if accepted else "reject"
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="print the plan only")
@@ -316,17 +354,30 @@ def main(argv=None) -> int:
                 _revert(written)
                 return 1
             res = run_tests()
-            if res.returncode == 0:
-                break
-            print(f"Attempt {attempt}: tests failed; feeding output back and retrying.")
-            feedback = res.stdout + res.stderr
-            _revert(written)
-            written = []
+            if res.returncode != 0:
+                print(f"Attempt {attempt}: tests failed; feeding output back and retrying.")
+                feedback = res.stdout + res.stderr
+                _revert(written)
+                written = []
+                continue
+            # Tests are green; run the JEV pertinence gate before committing so a
+            # change that stays green but is slop gets another attempt.
+            if _jev_gate(slug, title, written) == "reject":
+                print(f"Attempt {attempt}: JEV judged the change not pertinent; retrying.")
+                feedback = (
+                    "Your change passed the tests but was judged NOT pertinent by a "
+                    "review model (slop, trivial, or unrelated to the item). Re-implement "
+                    "the item as a real, well-scoped improvement."
+                )
+                _revert(written)
+                written = []
+                continue
+            break
         else:
             # A hard item must not block the pipeline forever: check it off with
             # a skip note so the next run advances to the following item.
             mark_done(slug)
-            commit_and_push(f"chore: skip {slug} (LLM could not produce a green change)", slug)
+            commit_and_push(f"chore: skip {slug} (LLM could not produce a green, pertinent change)", slug)
             print(f"Skipped {slug} after 3 failed attempts.")
             return 0
 

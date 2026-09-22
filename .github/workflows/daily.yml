@@ -36,3 +36,6 @@ jobs:
           # DeepSeek provider (optional — used only for items without a handler).
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+          # JEV pertinence gate (optional — reviews green changes for slop).
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          JEV_MODEL: ${{ vars.JEV_MODEL }}
