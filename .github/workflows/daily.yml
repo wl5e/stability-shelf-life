@@ -10,6 +10,9 @@ on:
 
 permissions:
   contents: write
+  # LLM items may touch .github/workflows/ (e.g. CI matrix); GitHub rejects
+  # GITHUB_TOKEN pushes that modify workflow files without this permission.
+  workflows: write
 
 jobs:
   daily:
