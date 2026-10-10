@@ -47,7 +47,17 @@ def commit_proposals() -> None:
     res = _run(["git", "commit", "-m", "chore: propose backlog replenishment"])
     if res.returncode != 0:
         return  # nothing new to commit (e.g. identical proposals) — fine
-    _run(["git", "push"])
+    push = _run(["git", "push"])
+    if push.returncode != 0:
+        # Surface the error instead of silently dropping the commit, and retry
+        # once after rebasing in case main advanced since checkout.
+        print(f"git push failed: {push.stderr.strip()}; rebasing and retrying.")
+        rebase = _run(["git", "pull", "--rebase"])
+        if rebase.returncode != 0:
+            raise RuntimeError(f"git pull --rebase failed: {rebase.stderr.strip()}")
+        push = _run(["git", "push"])
+    if push.returncode != 0:
+        raise RuntimeError(f"git push failed after retry: {push.stderr.strip()}")
 
 
 def main() -> int:

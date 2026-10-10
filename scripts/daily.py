@@ -268,7 +268,17 @@ def commit_and_push(subject: str, slug: str) -> None:
     res = _run(["git", "commit", "-m", subject, "-m", body])
     if res.returncode != 0:
         raise RuntimeError(f"git commit failed: {res.stderr.strip()}")
-    _run(["git", "push"])
+    push = _run(["git", "push"])
+    if push.returncode != 0:
+        # Surface the error instead of silently dropping the commit, and retry
+        # once after rebasing in case main advanced since checkout.
+        print(f"git push failed: {push.stderr.strip()}; rebasing and retrying.")
+        rebase = _run(["git", "pull", "--rebase"])
+        if rebase.returncode != 0:
+            raise RuntimeError(f"git pull --rebase failed: {rebase.stderr.strip()}")
+        push = _run(["git", "push"])
+    if push.returncode != 0:
+        raise RuntimeError(f"git push failed after retry: {push.stderr.strip()}")
 
 
 def _diff_for(written) -> str:
