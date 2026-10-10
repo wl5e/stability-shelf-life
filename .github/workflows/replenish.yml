@@ -13,9 +13,6 @@ on:
 
 permissions:
   contents: write
-  # Backlog proposals never touch workflow files, but keep the same permission
-  # surface as daily.yml so the token is never the reason a push gets rejected.
-  workflows: write
 
 jobs:
   replenish:
