@@ -49,6 +49,17 @@ _T_CRITICAL_TABLE: Dict[int, float] = {
 }
 _NORMAL_QUANTILE_95 = 1.6448536269514722  # Phi^-1(0.95)
 
+# Two-sided 95% t critical values (97.5% quantile), indexed by df (1..30).
+_T_CRITICAL_TABLE_TWO_SIDED: Dict[int, float] = {
+    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571,
+    6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
+    11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131,
+    16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
+    21: 2.080, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060,
+    26: 2.056, 27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042,
+}
+_NORMAL_QUANTILE_975 = 1.959963984540054  # Phi^-1(0.975)
+
 
 class StabilityError(Exception):
     """Raised when stability data are invalid or physically inconsistent."""
@@ -91,6 +102,25 @@ class ShelfLife:
 
 
 @dataclass(frozen=True)
+class RateConfidenceInterval:
+    """Confidence bounds for a fitted degradation rate.
+
+    ``lower`` and ``upper`` delimit the two-sided 95% confidence interval of
+    the degradation rate, while ``one_sided_lower`` is the one-sided 95%
+    lower confidence bound that ICH Q1E relies on.  The interval is symmetric
+    on the regressed scale (potency for zero-order, ln potency for
+    first-order), so its half-width is ``t * slope_std_error``.
+    """
+
+    rate: float
+    lower: float
+    upper: float
+    one_sided_lower: float
+    std_error: float
+    df: int
+
+
+@dataclass(frozen=True)
 class SlopeDifference:
     """F test for equality of degradation slopes across several batches."""
 
@@ -121,6 +151,13 @@ def t_critical(df: int) -> float:
     if df < 1:
         raise ValueError("degrees of freedom must be >= 1")
     return _T_CRITICAL_TABLE.get(df, _NORMAL_QUANTILE_95)
+
+
+def t_critical_two_sided(df: int) -> float:
+    """Two-sided 95% critical value of Student's t for ``df`` degrees of freedom."""
+    if df < 1:
+        raise ValueError("degrees of freedom must be >= 1")
+    return _T_CRITICAL_TABLE_TWO_SIDED.get(df, _NORMAL_QUANTILE_975)
 
 
 def _beta_continued_fraction(a: float, b: float, x: float) -> float:
@@ -326,6 +363,31 @@ def estimate_shelf_life(fit: KineticFit, limit: float) -> ShelfLife:
         lower_bound_months=lower,
         limit=limit,
         stable=True,
+    )
+
+
+def rate_confidence_interval(fit: KineticFit) -> RateConfidenceInterval:
+    """Two-sided 95% CI and one-sided 95% lower bound for a degradation rate.
+
+    The degradation rate is the negated regression slope (``rate = -slope``),
+    so its standard error equals the slope standard error.  The two-sided
+    interval is ``rate +/- t_two_sided(df) * se`` and the ICH Q1E one-sided
+    bound is ``rate - t_one_sided(df) * se``; as ``t_two_sided > t_one_sided``
+    the one-sided bound always lies inside the two-sided interval.
+    """
+    reg = fit.regression
+    df = reg.n - 2
+    rate = -reg.slope
+    std_error = reg.slope_std_error
+    half_width = t_critical_two_sided(df) * std_error
+    one_sided_half_width = t_critical(df) * std_error
+    return RateConfidenceInterval(
+        rate=rate,
+        lower=rate - half_width,
+        upper=rate + half_width,
+        one_sided_lower=rate - one_sided_half_width,
+        std_error=std_error,
+        df=df,
     )
 
 

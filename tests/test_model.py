@@ -14,9 +14,11 @@ from stability_shelf_life.model import (
     linear_fit,
     outlier_diagnostic,
     predict_arrhenius_rate,
+    rate_confidence_interval,
     regularized_incomplete_beta,
     slope_difference_test,
     t_critical,
+    t_critical_two_sided,
 )
 
 
@@ -39,6 +41,14 @@ def test_t_critical_table_and_normal_approx():
     assert t_critical(1) == pytest.approx(6.314)
     assert t_critical(30) == pytest.approx(1.697)
     assert t_critical(120) == pytest.approx(1.64485, abs=1e-4)
+
+
+def test_t_critical_two_sided_table_and_normal_approx():
+    assert t_critical_two_sided(1) == pytest.approx(12.706)
+    assert t_critical_two_sided(30) == pytest.approx(2.042)
+    assert t_critical_two_sided(120) == pytest.approx(1.95996, abs=1e-4)
+    with pytest.raises(ValueError, match=">= 1"):
+        t_critical_two_sided(0)
 
 
 def test_first_order_kinetics_recovers_rate():
@@ -89,6 +99,37 @@ def test_shelf_life_stable_flag_when_no_degradation():
     shelf = estimate_shelf_life(fit, limit=90.0)
     assert shelf.stable is False
     assert shelf.point_estimate_months == math.inf
+
+
+def test_rate_confidence_interval_brackets_rate():
+    k_true = 0.0045
+    times = [0.0, 3.0, 6.0, 9.0, 12.0, 18.0, 24.0]
+    noise = [0.0, 0.15, -0.10, 0.05, -0.20, 0.10, -0.05]
+    values = [100.0 * math.exp(-k_true * t) + n for t, n in zip(times, noise)]
+    fit = fit_kinetics(times, values, order=1)
+    ci = rate_confidence_interval(fit)
+
+    assert ci.df == fit.regression.n - 2
+    assert ci.std_error == pytest.approx(fit.regression.slope_std_error)
+    assert ci.lower < ci.rate < ci.upper
+    # The one-sided bound sits strictly inside the two-sided interval.
+    assert ci.lower < ci.one_sided_lower < ci.upper
+    # The two-sided interval is wider than the one-sided lower bound.
+    assert (ci.rate - ci.lower) > (ci.rate - ci.one_sided_lower)
+
+
+def test_rate_confidence_interval_zero_order_perfect_fit():
+    k_true = 0.5
+    times = [0.0, 3.0, 6.0, 9.0, 12.0]
+    values = [100.0 - k_true * t for t in times]
+    fit = fit_kinetics(times, values, order=0)
+    ci = rate_confidence_interval(fit)
+
+    assert ci.rate == pytest.approx(k_true)
+    # A perfect fit has zero residual error, so every bound collapses on k.
+    assert ci.lower == pytest.approx(k_true)
+    assert ci.upper == pytest.approx(k_true)
+    assert ci.one_sided_lower == pytest.approx(k_true)
 
 
 def test_arrhenius_fit_and_prediction():

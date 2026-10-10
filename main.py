@@ -31,7 +31,11 @@ from stability_shelf_life import (
     load_stability_data,
     predict_arrhenius_rate,
 )
-from stability_shelf_life.model import SlopeDifference, slope_difference_test
+from stability_shelf_life.model import (
+    SlopeDifference,
+    rate_confidence_interval,
+    slope_difference_test,
+)
 from stability_shelf_life.report import render_html_report
 
 
@@ -99,6 +103,7 @@ def _run_q1e(args) -> int:
         fits = [fit_kinetics(batch.times, batch.values, o) for o in (0, 1)]
         best, best_name = _select_model(fits)
         shelf = estimate_shelf_life(best, limit)
+        best_ci = rate_confidence_interval(best)
 
         entry = {
             "batch_id": batch_id,
@@ -106,6 +111,9 @@ def _run_q1e(args) -> int:
             "best_model": best_name,
             "best_rate": round(best.rate, 6),
             "best_rate_unit": "percent/month" if best.order == 0 else "1/month",
+            "best_rate_ci_95_lower": round(best_ci.lower, 6),
+            "best_rate_ci_95_upper": round(best_ci.upper, 6),
+            "best_rate_one_sided_95_lower": round(best_ci.one_sided_lower, 6),
             "best_r_squared": round(best.r_squared, 5),
             "shelf_life_months": None,
             "shelf_life_lower_95_months": None,
@@ -119,11 +127,15 @@ def _run_q1e(args) -> int:
             fits_by_order[fit.order].append(fit)
             ids_by_order[fit.order].append(batch_id)
             name = "zero-order" if fit.order == 0 else "first-order"
+            ci = rate_confidence_interval(fit)
             entry["models"].append(
                 {
                     "model": name,
                     "rate": round(fit.rate, 6),
                     "rate_unit": "percent/month" if fit.order == 0 else "1/month",
+                    "rate_ci_95_lower": round(ci.lower, 6),
+                    "rate_ci_95_upper": round(ci.upper, 6),
+                    "rate_one_sided_95_lower": round(ci.one_sided_lower, 6),
                     "initial_potency": round(fit.initial, 3),
                     "r_squared": round(fit.r_squared, 5),
                 }
@@ -165,6 +177,11 @@ def _print_q1e_report(report) -> None:
             print(
                 f"  {m['model']:>11}: k = {m['rate']:.5f}{unit}, "
                 f"C0 = {m['initial_potency']:.2f}%, R² = {m['r_squared']:.4f}"
+            )
+            print(
+                "                95% CI for k: "
+                f"[{m['rate_ci_95_lower']:.5f}, {m['rate_ci_95_upper']:.5f}]"
+                f"{unit} (one-sided lower {m['rate_one_sided_95_lower']:.5f})"
             )
         if entry["shelf_life_months"] is None:
             print("  -> no degradation detected (shelf life not estimable)")
