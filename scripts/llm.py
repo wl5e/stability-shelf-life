@@ -43,6 +43,8 @@ SYSTEM_PROMPT = (
     "- Make a MINIMAL, correct change; touch 1-3 files at most.\n"
     "- If you change production code, add or update a test that covers it.\n"
     "- Do NOT break existing behaviour; the existing test suite must keep passing.\n"
+    "- NEVER modify or create files under .github/workflows/ — pushes touching\n"
+    "  workflow files are rejected by GitHub and the change will be discarded.\n"
     "- Follow the existing style: stdlib only, type hints, frozen dataclasses.\n"
     "- Return ONLY a JSON object, with this exact shape and no surrounding prose:\n"
     '  {"summary": "<conventional commit subject>",\n'
