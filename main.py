@@ -33,6 +33,7 @@ from stability_shelf_life import (
 )
 from stability_shelf_life.model import (
     SlopeDifference,
+    information_criterion,
     rate_confidence_interval,
     slope_difference_test,
 )
@@ -61,10 +62,18 @@ def _write_text_report(content: str, output_path: str, label: str) -> None:
         ) from exc
 
 
-def _select_model(fits):
-    """Choose the best model by R²; prefer first-order on a tie."""
+def _select_model(fits, times, values):
+    """Choose between the zero- and first-order models by AIC.
+
+    The information criteria are evaluated on the common potency scale, so
+    the two models are compared on equal footing (their residuals on the
+    transformed scale are not comparable).  Lower AIC wins; on a tie the
+    first-order model is preferred.
+    """
     zero, first = fits[0], fits[1]
-    if first.r_squared >= zero.r_squared:
+    zero_aic = information_criterion(zero, times, values).aic
+    first_aic = information_criterion(first, times, values).aic
+    if first_aic <= zero_aic:
         return first, "first-order"
     return zero, "zero-order"
 
@@ -101,7 +110,7 @@ def _run_q1e(args) -> int:
     for batch_id in sorted(batches):
         batch = batches[batch_id]
         fits = [fit_kinetics(batch.times, batch.values, o) for o in (0, 1)]
-        best, best_name = _select_model(fits)
+        best, best_name = _select_model(fits, batch.times, batch.values)
         shelf = estimate_shelf_life(best, limit)
         best_ci = rate_confidence_interval(best)
 

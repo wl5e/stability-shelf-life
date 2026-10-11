@@ -24,8 +24,8 @@ Five capabilities are provided:
    that flag observations exerting undue influence on a fitted model.
 
 The module uses only the Python standard library.  The one-sided 95%
-t-critical values are tabulated for 1..30 degrees of freedom and
-approximated by the standard-normal quantile beyond that.
+   t-critical values are tabulated for 1..30 degrees of freedom and
+   approximated by the standard-normal quantile beyond that.
 """
 
 from __future__ import annotations
@@ -118,6 +118,25 @@ class RateConfidenceInterval:
     one_sided_lower: float
     std_error: float
     df: int
+
+
+@dataclass(frozen=True)
+class InformationCriterion:
+    """Akaike/Bayesian information criteria for a fitted kinetic model.
+
+    ``sse`` is the residual sum of squares of the model's predictions in the
+    original potency units (not the transformed scale), so the zero- and
+    first-order models can be compared on equal footing.  ``k`` is the number
+    of fitted parameters (initial potency and rate) and is 2 for both models.
+    ``aic`` and ``bic`` are ``-inf`` when the fit is numerically perfect.
+    """
+
+    order: int
+    n: int
+    k: int
+    sse: float
+    aic: float
+    bic: float
 
 
 @dataclass(frozen=True)
@@ -388,6 +407,52 @@ def rate_confidence_interval(fit: KineticFit) -> RateConfidenceInterval:
         one_sided_lower=rate - one_sided_half_width,
         std_error=std_error,
         df=df,
+    )
+
+
+def information_criterion(
+    fit: KineticFit, times: Sequence[float], values: Sequence[float]
+) -> InformationCriterion:
+    """Compute AIC and BIC for a kinetic fit on the original potency scale.
+
+    Zero-order and first-order models are fitted on different scales (potency
+    and ln potency), so their transformed residuals are not directly
+    comparable.  Both criteria are therefore derived from the residual sum of
+    squares of the *potency-scale* predictions, which puts the two models on
+    equal footing and lets them be ranked directly.
+
+    With ``n`` observations and ``k = 2`` parameters:
+
+        AIC = n * ln(SSE / n) + 2 * k
+        BIC = n * ln(SSE / n) + k * ln(n)
+
+    A numerically perfect fit (``SSE`` at or below floating-point noise
+    relative to the data) sends both criteria to ``-inf``.
+    """
+    n = len(times)
+    if n != len(values):
+        raise ValueError("times and values must have the same length")
+    if n != fit.regression.n:
+        raise ValueError("times/values length does not match the fit")
+
+    if fit.order == 0:
+        predicted = [fit.initial - fit.rate * t for t in times]
+    else:
+        predicted = [fit.initial * math.exp(-fit.rate * t) for t in times]
+    sse = sum((v - p) ** 2 for v, p in zip(values, predicted))
+
+    k = 2
+    scale = sum(v * v for v in values)
+    if sse <= 0.0 or (scale > 0.0 and sse <= 1e-12 * scale):
+        aic = -math.inf
+        bic = -math.inf
+    else:
+        log_term = n * math.log(sse / n)
+        aic = log_term + 2 * k
+        bic = log_term + k * math.log(n)
+
+    return InformationCriterion(
+        order=fit.order, n=n, k=k, sse=sse, aic=aic, bic=bic
     )
 
 

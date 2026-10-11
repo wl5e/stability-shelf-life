@@ -11,6 +11,7 @@ from stability_shelf_life.model import (
     f_test_p_value,
     fit_arrhenius,
     fit_kinetics,
+    information_criterion,
     linear_fit,
     outlier_diagnostic,
     predict_arrhenius_rate,
@@ -267,3 +268,33 @@ def test_outlier_diagnostic_validates_inputs():
             [0.0, 1.0, 2.0],
             [1.0, 2.0, 3.0],
         )
+
+
+def test_information_criterion_is_computed_on_potency_scale():
+    # For a first-order fit the transformed (ln) residuals are tiny, but the
+    # criterion must be based on the potency-scale residuals, not those.
+    k_true = 0.03
+    times = [0.0, 3.0, 6.0, 9.0, 12.0]
+    values = [100.0 * math.exp(-k_true * t) for t in times]
+    fit = fit_kinetics(times, values, order=1)
+    crit = information_criterion(fit, times, values)
+
+    assert crit.sse == pytest.approx(0.0, abs=1e-6)
+    assert crit.aic == -math.inf
+    assert crit.bic == -math.inf
+
+
+def test_information_criterion_prefers_fitting_order():
+    # First-order data with noise: the first-order model must win on AIC/BIC.
+    k_true = 0.03
+    times = [0.0, 3.0, 6.0, 9.0, 12.0, 18.0, 24.0]
+    noise = [0.0, 0.4, -0.3, 0.2, -0.5, 0.3, -0.1]
+    values = [100.0 * math.exp(-k_true * t) + n for t, n in zip(times, noise)]
+    zero = fit_kinetics(times, values, order=0)
+    first = fit_kinetics(times, values, order=1)
+    crit_zero = information_criterion(zero, times, values)
+    crit_first = information_criterion(first, times, values)
+
+    assert crit_first.sse < crit_zero.sse
+    assert crit_first.aic < crit_zero.aic
+    assert crit_first.bic < crit_zero.bic
