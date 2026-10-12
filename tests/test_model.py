@@ -17,6 +17,9 @@ from stability_shelf_life.model import (
     predict_arrhenius_rate,
     rate_confidence_interval,
     regularized_incomplete_beta,
+    residual_diagnostics,
+    residual_normality,
+    runs_test,
     slope_difference_test,
     t_critical,
     t_critical_two_sided,
@@ -298,3 +301,111 @@ def test_information_criterion_prefers_fitting_order():
     assert crit_first.sse < crit_zero.sse
     assert crit_first.aic < crit_zero.aic
     assert crit_first.bic < crit_zero.bic
+
+
+def test_residual_normality_accepts_symmetric_residuals():
+    residuals = [-1.2, -0.8, -0.5, -0.2, -0.1, 0.1, 0.2, 0.5, 0.8, 1.2]
+    result = residual_normality(residuals)
+    assert result.n == 10
+    assert result.skewness == pytest.approx(0.0, abs=1e-9)
+    assert result.excess_kurtosis == pytest.approx(-0.75, abs=0.05)
+    assert result.is_normal is True
+    assert result.p_value > 0.05
+
+
+def test_residual_normality_flags_skewed_residuals():
+    residuals = [0.1] * 9 + [10.0]
+    result = residual_normality(residuals)
+    assert result.skewness > 1.5
+    assert result.statistic > 10.0
+    assert result.is_normal is False
+    assert result.p_value < 0.05
+
+
+def test_residual_normality_requires_eight_points():
+    with pytest.raises(StabilityError, match="at least 8"):
+        residual_normality([0.1, -0.2, 0.3, -0.1, 0.2, -0.3, 0.05])
+
+
+def test_runs_test_detects_systematic_residual_pattern():
+    residuals = [-1.0, -1.1, -0.9, -1.2, -1.0, 1.0, 1.1, 0.9, 1.2, 1.0]
+    result = runs_test(residuals)
+    assert (result.positive, result.negative) == (5, 5)
+    assert result.runs == 2
+    assert result.expected_runs == pytest.approx(6.0)
+    assert result.z_statistic < 0.0
+    assert result.is_random is False
+    assert result.p_value < 0.05
+
+
+def test_runs_test_accepts_random_residual_order():
+    residuals = [0.5, -0.3, 0.2, -0.4, -0.1, 0.6, 0.3, -0.2, -0.5, 0.4]
+    result = runs_test(residuals)
+    assert result.runs == 7
+    assert result.is_random is True
+    assert result.p_value > 0.05
+
+
+def test_runs_test_drops_zero_residuals():
+    residuals = [0.0, 1.0, -1.0, 0.0, 1.0, -1.0]
+    result = runs_test(residuals)
+    assert (result.positive, result.negative) == (2, 2)
+    assert result.runs == 4
+
+
+def test_runs_test_requires_both_signs():
+    with pytest.raises(StabilityError, match="both positive and negative"):
+        runs_test([1.0, 2.0, 3.0])
+    with pytest.raises(StabilityError, match="non-zero"):
+        runs_test([0.0, 0.0, 0.0])
+
+
+def test_residual_diagnostics_accepts_well_fitted_model():
+    k_true = 0.0045
+    times = [0.0, 3.0, 6.0, 9.0, 12.0, 18.0, 24.0]
+    noise = [0.0, 0.15, -0.10, 0.05, -0.20, 0.10, -0.05]
+    values = [100.0 * math.exp(-k_true * t) + n for t, n in zip(times, noise)]
+    fit = fit_kinetics(times, values, order=1)
+    diag = residual_diagnostics(fit, times, values)
+
+    # Seven points: the normality test is skipped, the runs test passes.
+    assert diag.normality is None
+    assert diag.runs.is_random is True
+    assert diag.poor_fit is False
+    assert diag.reasons == []
+
+
+def test_residual_diagnostics_flags_systematic_residual_pattern():
+    # A curved (quadratic) profile fitted with a straight line leaves two
+    # long runs of same-sign residuals: the runs test must flag the fit.
+    times = [float(t) for t in range(12)]
+    values = [100.0 - (t - 5.5) ** 2 for t in range(12)]
+    fit = fit_kinetics(times, values, order=0)
+    diag = residual_diagnostics(fit, times, values)
+
+    assert diag.normality is not None
+    assert diag.normality.is_normal is True
+    assert diag.runs.runs == 3
+    assert diag.runs.is_random is False
+    assert diag.poor_fit is True
+    assert len(diag.reasons) == 1
+    assert "runs" in diag.reasons[0]
+
+
+def test_residual_diagnostics_validates_inputs():
+    times = [0.0, 3.0, 6.0, 9.0]
+    values = [100.0 * math.exp(-0.01 * t) for t in times]
+    fit = fit_kinetics(times, values, order=1)
+
+    with pytest.raises(ValueError, match="same length"):
+        residual_diagnostics(fit, times[:-1], values)
+    with pytest.raises(ValueError, match="does not match"):
+        residual_diagnostics(fit, times + [12.0], values + [90.0])
+
+
+def test_residual_diagnostics_rejects_exact_fit():
+    times = [0.0, 3.0, 6.0, 9.0, 12.0]
+    values = [100.0 - 2.0 * t for t in times]
+    fit = fit_kinetics(times, values, order=0)
+    with pytest.raises(StabilityError, match="non-zero"):
+        residual_diagnostics(fit, times, values)

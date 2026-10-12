@@ -1,6 +1,6 @@
 """Statistical core of pharmaceutical stability modelling.
 
-Five capabilities are provided:
+Six capabilities are provided:
 
 1. **Kinetic fitting** — zero-order (linear in potency) and first-order
    (linear in ln potency) degradation, following ICH Q1E.
@@ -23,6 +23,10 @@ Five capabilities are provided:
 5. **Outlier diagnostics** — leverage and externally studentized residuals
    that flag observations exerting undue influence on a fitted model.
 
+6. **Residual diagnostics** — a D'Agostino-Pearson normality test and a
+   Wald-Wolfowitz runs test that flag a kinetic model whose residuals
+   contradict the assumptions behind the confidence bounds.
+
 The module uses only the Python standard library.  The one-sided 95%
    t-critical values are tabulated for 1..30 degrees of freedom and
    approximated by the standard-normal quantile beyond that.
@@ -34,7 +38,7 @@ import math
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 GAS_CONSTANT = 8.31446261815324  # J/(mol*K)
 
@@ -694,4 +698,259 @@ def outlier_diagnostic(
         is_outlier=is_outlier,
         threshold=threshold,
         leverage_cutoff=leverage_cutoff,
+    )
+
+
+@dataclass(frozen=True)
+class ResidualNormality:
+    """D'Agostino-Pearson omnibus test for the normality of residuals.
+
+    ``skewness`` is the third sample moment and ``excess_kurtosis`` the
+    fourth (relative to 3); both are zero for normally distributed errors.
+    ``skewness_z`` and ``kurtosis_z`` standardize them, and ``statistic`` is
+    their sum of squares, which follows a chi-square distribution with two
+    degrees of freedom under the null hypothesis of normality.  ``is_normal``
+    is False when the residuals depart significantly from normality, which
+    indicates that the kinetic model misses structure in the data.
+    """
+
+    n: int
+    skewness: float
+    excess_kurtosis: float
+    skewness_z: float
+    kurtosis_z: float
+    statistic: float
+    p_value: float
+    is_normal: bool
+
+
+@dataclass(frozen=True)
+class RunsTest:
+    """Wald-Wolfowitz runs test on the signs of a residual series.
+
+    A model that fits well leaves residuals whose signs alternate
+    unpredictably.  Structure the model cannot explain (curvature, a lag
+    phase, drift) instead clusters residuals of equal sign, so ``runs``
+    falls short of ``expected_runs`` and ``is_random`` becomes False.
+    """
+
+    positive: int
+    negative: int
+    runs: int
+    expected_runs: float
+    z_statistic: float
+    p_value: float
+    is_random: bool
+
+
+@dataclass(frozen=True)
+class ResidualDiagnostics:
+    """Residual normality and runs-test diagnostics for a kinetic fit.
+
+    ``normality`` is None when the residual series is too short for the
+    D'Agostino-Pearson test (fewer than 8 points), in which case only the
+    runs test can flag the model.  ``poor_fit`` is True when either test
+    rejects its null hypothesis, and ``reasons`` lists the failures (it is
+    empty for a satisfactory fit).
+    """
+
+    normality: Optional[ResidualNormality]
+    runs: RunsTest
+    poor_fit: bool
+    reasons: List[str]
+
+
+def _dagostino_skewness_z(skewness: float, n: int) -> float:
+    """Standardized skewness of the D'Agostino-Pearson statistic."""
+    y = skewness * math.sqrt(((n + 1.0) * (n + 3.0)) / (6.0 * (n - 2.0)))
+    beta2 = (
+        3.0 * (n * n + 27.0 * n - 70.0) * (n + 1.0) * (n + 3.0)
+        / ((n - 2.0) * (n + 5.0) * (n + 7.0) * (n + 9.0))
+    )
+    w2 = -1.0 + math.sqrt(2.0 * (beta2 - 1.0))
+    delta = 1.0 / math.sqrt(0.5 * math.log(w2))
+    alpha = math.sqrt(2.0 / (w2 - 1.0))
+    return delta * math.asinh(y / alpha)
+
+
+def _dagostino_kurtosis_z(kurtosis: float, n: int) -> float:
+    """Standardized kurtosis of the D'Agostino-Pearson statistic."""
+    expected = 3.0 * (n - 1.0) / (n + 1.0)
+    variance = (
+        24.0 * n * (n - 2.0) * (n - 3.0)
+        / ((n + 1.0) ** 2 * (n + 3.0) * (n + 5.0))
+    )
+    x = (kurtosis - expected) / math.sqrt(variance)
+    sqrt_beta1 = (
+        6.0 * (n * n - 5.0 * n + 2.0) / ((n + 7.0) * (n + 9.0))
+        * math.sqrt(6.0 * (n + 3.0) * (n + 5.0) / (n * (n - 2.0) * (n - 3.0)))
+    )
+    a = 6.0 + (8.0 / sqrt_beta1) * (
+        2.0 / sqrt_beta1 + math.sqrt(1.0 + 4.0 / sqrt_beta1 ** 2)
+    )
+    denominator = 1.0 + x * math.sqrt(2.0 / (a - 4.0))
+    ratio = (1.0 - 2.0 / a) / denominator
+    cube_root = math.copysign(abs(ratio) ** (1.0 / 3.0), ratio)
+    return (1.0 - 2.0 / (9.0 * a) - cube_root) / math.sqrt(2.0 / (9.0 * a))
+
+
+def residual_normality(
+    residuals: Sequence[float], alpha: float = 0.05
+) -> ResidualNormality:
+    """Test a residual series for normality (D'Agostino-Pearson omnibus test).
+
+    At least 8 residuals are required because the standardized skewness
+    statistic is unreliable for shorter series; fewer raises
+    :class:`StabilityError`.  ``is_normal`` is False when the residuals
+    depart significantly from a normal distribution, which signals that the
+    kinetic model does not explain the data it was fitted to.
+    """
+    n = len(residuals)
+    if n < 8:
+        raise StabilityError(
+            "at least 8 residuals are required for the normality test"
+        )
+
+    mean = sum(residuals) / n
+    m2 = sum((r - mean) ** 2 for r in residuals) / n
+    if m2 <= 0.0:
+        raise StabilityError("residuals have zero variance")
+    m3 = sum((r - mean) ** 3 for r in residuals) / n
+    m4 = sum((r - mean) ** 4 for r in residuals) / n
+
+    skewness = m3 / m2 ** 1.5
+    kurtosis = m4 / (m2 * m2)
+    skewness_z = _dagostino_skewness_z(skewness, n)
+    kurtosis_z = _dagostino_kurtosis_z(kurtosis, n)
+    statistic = skewness_z ** 2 + kurtosis_z ** 2
+    p_value = math.exp(-0.5 * statistic)  # upper tail of chi-square(2)
+
+    return ResidualNormality(
+        n=n,
+        skewness=skewness,
+        excess_kurtosis=kurtosis - 3.0,
+        skewness_z=skewness_z,
+        kurtosis_z=kurtosis_z,
+        statistic=statistic,
+        p_value=p_value,
+        is_normal=p_value >= alpha,
+    )
+
+
+def runs_test(residuals: Sequence[float], alpha: float = 0.05) -> RunsTest:
+    """Wald-Wolfowitz runs test on the signs of a residual series.
+
+    Residuals equal to zero carry no sign and are dropped.  Under the null
+    hypothesis of a random sequence the number of runs is approximately
+    normal with mean ``2*n1*n2/(n1+n2) + 1`` and the variance given by Wald
+    and Wolfowitz (1940); the statistic carries the conventional continuity
+    correction of 0.5.  ``is_random`` is False when the observed number of
+    runs is significantly above or below the expectation (two-sided), i.e.
+    when the residuals show a systematic pattern.
+    """
+    signs = [1 if r > 0.0 else -1 for r in residuals if r != 0.0]
+    if not signs:
+        raise StabilityError("runs test needs at least one non-zero residual")
+
+    n1 = signs.count(1)
+    n2 = signs.count(-1)
+    if n1 == 0 or n2 == 0:
+        raise StabilityError(
+            "runs test needs both positive and negative residuals"
+        )
+
+    total = n1 + n2
+    runs = 1 + sum(1 for a, b in zip(signs, signs[1:]) if a != b)
+    expected = 2.0 * n1 * n2 / total + 1.0
+    variance = (
+        2.0 * n1 * n2 * (2.0 * n1 * n2 - total)
+        / (total * total * (total - 1.0))
+    )
+
+    if variance <= 0.0:
+        return RunsTest(
+            positive=n1, negative=n2, runs=runs, expected_runs=expected,
+            z_statistic=0.0, p_value=1.0, is_random=True,
+        )
+
+    std_error = math.sqrt(variance)
+    if runs > expected:
+        z_statistic = (runs - expected - 0.5) / std_error
+    elif runs < expected:
+        z_statistic = (runs - expected + 0.5) / std_error
+    else:
+        z_statistic = 0.0
+    p_value = math.erfc(abs(z_statistic) / math.sqrt(2.0))
+
+    return RunsTest(
+        positive=n1,
+        negative=n2,
+        runs=runs,
+        expected_runs=expected,
+        z_statistic=z_statistic,
+        p_value=p_value,
+        is_random=p_value >= alpha,
+    )
+
+
+def residual_diagnostics(
+    fit: KineticFit,
+    times: Sequence[float],
+    values: Sequence[float],
+    alpha: float = 0.05,
+) -> ResidualDiagnostics:
+    """Test the residuals of a kinetic fit for normality and randomness.
+
+    ``times`` and ``values`` must be the observations behind ``fit``.  The
+    residuals are taken on the scale of the regression (potency for the
+    zero-order model, ln potency for the first-order model) because that is
+    the scale on which the ICH Q1E confidence bounds assume independent,
+    normally distributed errors.
+
+    ``poor_fit`` is True when either the D'Agostino-Pearson normality test
+    or the Wald-Wolfowitz runs test rejects its null hypothesis at ``alpha``.
+    The normality test needs at least 8 residuals and is skipped for shorter
+    series (``normality`` is None); the runs test always applies but has
+    little power below roughly eight points.
+    """
+    if len(times) != len(values):
+        raise ValueError("times and values must have the same length")
+    if len(times) != fit.regression.n:
+        raise ValueError("times/values length does not match the fit")
+
+    if fit.order == 0:
+        ys = list(values)
+    else:
+        if any(v <= 0.0 for v in values):
+            raise StabilityError("potency values must be positive")
+        ys = [math.log(v) for v in values]
+
+    regression = fit.regression
+    residuals = [
+        y - (regression.intercept + regression.slope * t)
+        for t, y in zip(times, ys)
+    ]
+
+    normality = (
+        residual_normality(residuals, alpha) if len(residuals) >= 8 else None
+    )
+    runs = runs_test(residuals, alpha)
+
+    reasons: List[str] = []
+    if normality is not None and not normality.is_normal:
+        reasons.append(
+            "residuals are not normally distributed "
+            f"(D'Agostino-Pearson p = {normality.p_value:.4f})"
+        )
+    if not runs.is_random:
+        reasons.append(
+            "residuals are not randomly ordered "
+            f"(runs test p = {runs.p_value:.4f})"
+        )
+
+    return ResidualDiagnostics(
+        normality=normality,
+        runs=runs,
+        poor_fit=bool(reasons),
+        reasons=reasons,
     )
