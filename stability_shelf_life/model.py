@@ -1,6 +1,6 @@
 """Statistical core of pharmaceutical stability modelling.
 
-Six capabilities are provided:
+Seven capabilities are provided:
 
 1. **Kinetic fitting** — zero-order (linear in potency) and first-order
    (linear in ln potency) degradation, following ICH Q1E.
@@ -26,6 +26,10 @@ Six capabilities are provided:
 6. **Residual diagnostics** — a D'Agostino-Pearson normality test and a
    Wald-Wolfowitz runs test that flag a kinetic model whose residuals
    contradict the assumptions behind the confidence bounds.
+
+7. **Descriptive statistics** — count, mean, sample standard deviation and
+   range of a batch's potency measurements, reported before any model is
+   fitted so the raw data can be inspected.
 
 The module uses only the Python standard library.  The one-sided 95%
    t-critical values are tabulated for 1..30 degrees of freedom and
@@ -82,6 +86,17 @@ class RegressionResult:
     sxx: float
     slope_std_error: float
     intercept_std_error: float
+
+
+@dataclass(frozen=True)
+class DescriptiveStatistics:
+    """Descriptive statistics of a potency series (n, mean, sd, min, max)."""
+
+    n: int
+    mean: float
+    sd: float        # sample standard deviation (Bessel's correction)
+    minimum: float
+    maximum: float
 
 
 @dataclass(frozen=True)
@@ -297,6 +312,29 @@ def linear_fit(xs: Sequence[float], ys: Sequence[float]) -> RegressionResult:
         sxx=sxx,
         slope_std_error=slope_std_error,
         intercept_std_error=intercept_std_error,
+    )
+
+
+def descriptive_statistics(values: Sequence[float]) -> DescriptiveStatistics:
+    """Summarise a series: count, mean, sample standard deviation and range.
+
+    The standard deviation uses Bessel's correction (``n - 1`` denominator)
+    and is 0.0 for a single observation, where spread is undefined.  These
+    statistics are descriptive only; they are reported before any kinetic
+    model is fitted so the raw potency data can be inspected.
+    """
+    n = len(values)
+    if n == 0:
+        raise StabilityError("at least one observation is required")
+
+    mean = sum(values) / n
+    if n > 1:
+        sd = math.sqrt(sum((v - mean) ** 2 for v in values) / (n - 1))
+    else:
+        sd = 0.0
+
+    return DescriptiveStatistics(
+        n=n, mean=mean, sd=sd, minimum=min(values), maximum=max(values)
     )
 
 

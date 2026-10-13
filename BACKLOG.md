@@ -29,7 +29,7 @@ Keep entries concrete: what changes, and why it matters for GMP/ICH work.
 - [x] `two_sided_ci` Report the two-sided 95% CI for the degradation rate alongside the one-sided bound. | handler:
 - [x] `aic_model_selection` Replace the R² tie-break with AIC/BIC for zero- vs first-order selection. | handler:
 - [x] `residual_diagnostics` Add residual normality and runs tests to flag a poor kinetic fit. | handler:
-- [ ] `data_summary_report` Print per-batch descriptive statistics (n, mean, sd, min, max) before fitting. | handler:
+- [x] `data_summary_report` Print per-batch descriptive statistics (n, mean, sd, min, max) before fitting. | handler:
 - [ ] `multi_limit_analysis` Evaluate shelf life at several specification limits (e.g. 90/95%) in one run. | handler:
 - [ ] `release_limit` Compute and report the release limit separately from the shelf life. | handler:
 - [ ] `ascii_confidence_band` Render the fitted line, its 95% confidence band and the limit as ASCII. | handler:

@@ -33,6 +33,7 @@ from stability_shelf_life import (
 )
 from stability_shelf_life.model import (
     SlopeDifference,
+    descriptive_statistics,
     information_criterion,
     rate_confidence_interval,
     slope_difference_test,
@@ -109,6 +110,7 @@ def _run_q1e(args) -> int:
 
     for batch_id in sorted(batches):
         batch = batches[batch_id]
+        stats = descriptive_statistics(batch.values)
         fits = [fit_kinetics(batch.times, batch.values, o) for o in (0, 1)]
         best, best_name = _select_model(fits, batch.times, batch.values)
         shelf = estimate_shelf_life(best, limit)
@@ -117,6 +119,13 @@ def _run_q1e(args) -> int:
         entry = {
             "batch_id": batch_id,
             "n_points": len(batch.times),
+            "summary": {
+                "n": stats.n,
+                "mean": round(stats.mean, 3),
+                "sd": round(stats.sd, 4),
+                "min": round(stats.minimum, 3),
+                "max": round(stats.maximum, 3),
+            },
             "best_model": best_name,
             "best_rate": round(best.rate, 6),
             "best_rate_unit": "percent/month" if best.order == 0 else "1/month",
@@ -181,6 +190,13 @@ def _print_q1e_report(report) -> None:
     print()
     for entry in report["batches"]:
         print(f"Batch {entry['batch_id']} ({entry['n_points']} time points)")
+        summary = entry.get("summary")
+        if summary is not None:
+            print(
+                f"  potency summary: n = {summary['n']}, "
+                f"mean = {summary['mean']:.3f}%, sd = {summary['sd']:.3f}, "
+                f"min = {summary['min']:.3f}%, max = {summary['max']:.3f}%"
+            )
         for m in entry["models"]:
             unit = " %/month" if m["model"] == "zero-order" else " /month"
             print(
