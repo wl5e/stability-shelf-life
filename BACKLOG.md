@@ -30,7 +30,7 @@ Keep entries concrete: what changes, and why it matters for GMP/ICH work.
 - [x] `aic_model_selection` Replace the R² tie-break with AIC/BIC for zero- vs first-order selection. | handler:
 - [x] `residual_diagnostics` Add residual normality and runs tests to flag a poor kinetic fit. | handler:
 - [x] `data_summary_report` Print per-batch descriptive statistics (n, mean, sd, min, max) before fitting. | handler:
-- [ ] `multi_limit_analysis` Evaluate shelf life at several specification limits (e.g. 90/95%) in one run. | handler:
+- [x] `multi_limit_analysis` Evaluate shelf life at several specification limits (e.g. 90/95%) in one run. | handler:
 - [ ] `release_limit` Compute and report the release limit separately from the shelf life. | handler:
 - [ ] `ascii_confidence_band` Render the fitted line, its 95% confidence band and the limit as ASCII. | handler:
 - [ ] `ich_q1a_table` Emit an ICH Q1A/Q1E-style summary table for regulatory reporting. | handler:

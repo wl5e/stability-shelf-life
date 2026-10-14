@@ -4,12 +4,13 @@ Two subcommands are provided:
 
     q1e       — ICH Q1E shelf-life estimation (zero/first-order kinetics,
                 one-sided 95% lower confidence bound, per batch) together
-                with an F test for slope differences between batches.
+                with an F test for slope differences between batches.  One
+                or more specification limits may be evaluated in one run.
     arrhenius — Arrhenius extrapolation of accelerated-stability data to a
                 chosen long-term storage temperature.
 
 Examples:
-    python main.py q1e --input examples/stability_data.csv --limit 90
+    python main.py q1e --input examples/stability_data.csv --limit 90 95
     python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25
 """
 
@@ -102,9 +103,14 @@ def _slope_difference_entry(
 
 def _run_q1e(args) -> int:
     batches = load_stability_data(args.input)
-    limit = args.limit
+    limits = [float(limit) for limit in args.limit]
 
-    report = {"limit": limit, "batches": [], "slope_difference": []}
+    report = {
+        "limit": limits[0],
+        "limits": limits,
+        "batches": [],
+        "slope_difference": [],
+    }
     fits_by_order = {0: [], 1: []}
     ids_by_order = {0: [], 1: []}
 
@@ -113,8 +119,31 @@ def _run_q1e(args) -> int:
         stats = descriptive_statistics(batch.values)
         fits = [fit_kinetics(batch.times, batch.values, o) for o in (0, 1)]
         best, best_name = _select_model(fits, batch.times, batch.values)
-        shelf = estimate_shelf_life(best, limit)
         best_ci = rate_confidence_interval(best)
+
+        shelf_lives = []
+        for limit in limits:
+            shelf = estimate_shelf_life(best, limit)
+            if shelf.stable:
+                shelf_lives.append(
+                    {
+                        "limit": limit,
+                        "shelf_life_months": round(
+                            shelf.point_estimate_months, 2
+                        ),
+                        "shelf_life_lower_95_months": round(
+                            shelf.lower_bound_months, 2
+                        ),
+                    }
+                )
+            else:
+                shelf_lives.append(
+                    {
+                        "limit": limit,
+                        "shelf_life_months": None,
+                        "shelf_life_lower_95_months": None,
+                    }
+                )
 
         entry = {
             "batch_id": batch_id,
@@ -133,13 +162,14 @@ def _run_q1e(args) -> int:
             "best_rate_ci_95_upper": round(best_ci.upper, 6),
             "best_rate_one_sided_95_lower": round(best_ci.one_sided_lower, 6),
             "best_r_squared": round(best.r_squared, 5),
-            "shelf_life_months": None,
-            "shelf_life_lower_95_months": None,
+            # First limit repeated at the batch level for backward compatibility.
+            "shelf_life_months": shelf_lives[0]["shelf_life_months"],
+            "shelf_life_lower_95_months": shelf_lives[0][
+                "shelf_life_lower_95_months"
+            ],
+            "shelf_life_by_limit": shelf_lives,
             "models": [],
         }
-        if shelf.stable:
-            entry["shelf_life_months"] = round(shelf.point_estimate_months, 2)
-            entry["shelf_life_lower_95_months"] = round(shelf.lower_bound_months, 2)
 
         for fit in fits:
             fits_by_order[fit.order].append(fit)
@@ -186,7 +216,12 @@ def _run_q1e(args) -> int:
 
 def _print_q1e_report(report) -> None:
     print("ICH Q1E stability analysis")
-    print(f"Specification limit: {report['limit']}%")
+    limits = report.get("limits") or [report["limit"]]
+    if len(limits) == 1:
+        print(f"Specification limit: {limits[0]}%")
+    else:
+        listed = ", ".join(f"{limit:g}%" for limit in limits)
+        print(f"Specification limits: {listed}")
     print()
     for entry in report["batches"]:
         print(f"Batch {entry['batch_id']} ({entry['n_points']} time points)")
@@ -208,14 +243,44 @@ def _print_q1e_report(report) -> None:
                 f"[{m['rate_ci_95_lower']:.5f}, {m['rate_ci_95_upper']:.5f}]"
                 f"{unit} (one-sided lower {m['rate_one_sided_95_lower']:.5f})"
             )
-        if entry["shelf_life_months"] is None:
-            print("  -> no degradation detected (shelf life not estimable)")
+        shelf_lives = entry.get("shelf_life_by_limit")
+        if not shelf_lives:
+            # Backward-compatible fallback for reports without the per-limit list.
+            shelf_lives = [
+                {
+                    "limit": report["limit"],
+                    "shelf_life_months": entry.get("shelf_life_months"),
+                    "shelf_life_lower_95_months": entry.get(
+                        "shelf_life_lower_95_months"
+                    ),
+                }
+            ]
+        if len(shelf_lives) == 1:
+            item = shelf_lives[0]
+            if item["shelf_life_months"] is None:
+                print("  -> no degradation detected (shelf life not estimable)")
+            else:
+                print(
+                    f"  -> best model: {entry['best_model']}, "
+                    f"shelf life = {item['shelf_life_months']} months "
+                    f"(95% lower bound "
+                    f"{item['shelf_life_lower_95_months']} months)"
+                )
         else:
-            print(
-                f"  -> best model: {entry['best_model']}, "
-                f"shelf life = {entry['shelf_life_months']} months "
-                f"(95% lower bound {entry['shelf_life_lower_95_months']} months)"
-            )
+            print(f"  -> best model: {entry['best_model']}")
+            for item in shelf_lives:
+                if item["shelf_life_months"] is None:
+                    print(
+                        f"     limit {item['limit']:g}%: no degradation "
+                        "detected (shelf life not estimable)"
+                    )
+                else:
+                    print(
+                        f"     limit {item['limit']:g}%: shelf life = "
+                        f"{item['shelf_life_months']} months "
+                        f"(95% lower bound "
+                        f"{item['shelf_life_lower_95_months']} months)"
+                    )
         print()
 
     slope_tests = report.get("slope_difference") or []
@@ -321,7 +386,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
     q1e = sub.add_parser("q1e", help="ICH Q1E shelf-life estimation")
     q1e.add_argument("--input", required=True, help="CSV: time_months,assay_percent,batch_id")
-    q1e.add_argument("--limit", type=float, required=True, help="acceptance criterion (percent)")
+    q1e.add_argument(
+        "--limit",
+        type=float,
+        nargs="+",
+        required=True,
+        metavar="PCT",
+        help="acceptance criterion/criteria in percent (one or more, e.g. --limit 90 95)",
+    )
     q1e.add_argument("--json", action="store_true", help="emit JSON")
     q1e.add_argument("--out", metavar="FILE", help="write JSON report to FILE")
     q1e.add_argument("--html", metavar="FILE", help="write standalone HTML report to FILE")

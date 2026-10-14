@@ -68,3 +68,36 @@ def test_q1e_text_report_prints_summary_before_models(tmp_path):
     assert "potency summary" in res.stdout
     # The descriptive statistics are reported before any model is fitted.
     assert res.stdout.index("potency summary") < res.stdout.index("zero-order")
+
+
+def test_q1e_evaluates_multiple_limits_in_one_run():
+    res = _run_cli(
+        "q1e", "--input", "examples/stability_data.csv",
+        "--limit", "90", "95", "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+
+    assert report["limits"] == [90.0, 95.0]
+    # The first limit is still exposed for backward compatibility.
+    assert report["limit"] == 90.0
+    for batch in report["batches"]:
+        by_limit = batch["shelf_life_by_limit"]
+        assert [item["limit"] for item in by_limit] == [90.0, 95.0]
+        shelf_90 = by_limit[0]["shelf_life_months"]
+        shelf_95 = by_limit[1]["shelf_life_months"]
+        assert shelf_90 > 0
+        assert shelf_95 > 0
+        # A stricter acceptance criterion shortens the shelf life.
+        assert shelf_95 < shelf_90
+
+
+def test_q1e_text_report_lists_each_limit():
+    res = _run_cli(
+        "q1e", "--input", "examples/stability_data.csv", "--limit", "90", "95"
+    )
+    assert res.returncode == 0, res.stderr
+    assert "Specification limits: 90%, 95%" in res.stdout
+    # Each limit is reported once per batch (two batches in the example data).
+    assert res.stdout.count("limit 90%") >= 2
+    assert res.stdout.count("limit 95%") >= 2
