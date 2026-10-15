@@ -37,6 +37,7 @@ from stability_shelf_life.model import (
     descriptive_statistics,
     information_criterion,
     rate_confidence_interval,
+    release_limit,
     slope_difference_test,
 )
 from stability_shelf_life.report import render_html_report
@@ -108,6 +109,7 @@ def _run_q1e(args) -> int:
     report = {
         "limit": limits[0],
         "limits": limits,
+        "release_limit_shelf_life_months": args.shelf_life,
         "batches": [],
         "slope_difference": [],
     }
@@ -122,6 +124,7 @@ def _run_q1e(args) -> int:
         best_ci = rate_confidence_interval(best)
 
         shelf_lives = []
+        release_limits = []
         for limit in limits:
             shelf = estimate_shelf_life(best, limit)
             if shelf.stable:
@@ -142,6 +145,16 @@ def _run_q1e(args) -> int:
                         "limit": limit,
                         "shelf_life_months": None,
                         "shelf_life_lower_95_months": None,
+                    }
+                )
+            if args.shelf_life is not None:
+                required = release_limit(best, limit, args.shelf_life)
+                release_limits.append(
+                    {
+                        "limit": limit,
+                        "release_limit_percent": round(required, 3),
+                        "fitted_initial_percent": round(best.initial, 3),
+                        "meets_release_limit": best.initial >= required,
                     }
                 )
 
@@ -168,6 +181,7 @@ def _run_q1e(args) -> int:
                 "shelf_life_lower_95_months"
             ],
             "shelf_life_by_limit": shelf_lives,
+            "release_limits": release_limits or None,
             "models": [],
         }
 
@@ -281,6 +295,21 @@ def _print_q1e_report(report) -> None:
                         f"(95% lower bound "
                         f"{item['shelf_life_lower_95_months']} months)"
                     )
+        release_limits = entry.get("release_limits")
+        if release_limits:
+            target = report.get("release_limit_shelf_life_months")
+            for item in release_limits:
+                verdict = (
+                    "satisfied"
+                    if item["meets_release_limit"]
+                    else "not satisfied"
+                )
+                print(
+                    f"     release limit for {item['limit']:g}% at "
+                    f"{target:g} months: {item['release_limit_percent']:g}% "
+                    f"(fitted initial {item['fitted_initial_percent']:g}%, "
+                    f"{verdict})"
+                )
         print()
 
     slope_tests = report.get("slope_difference") or []
@@ -393,6 +422,17 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         metavar="PCT",
         help="acceptance criterion/criteria in percent (one or more, e.g. --limit 90 95)",
+    )
+    q1e.add_argument(
+        "--shelf-life",
+        type=float,
+        default=None,
+        metavar="MONTHS",
+        help=(
+            "target shelf life in months; when given, the release limit "
+            "(minimum t=0 potency that still meets each acceptance criterion "
+            "at this shelf life) is computed and reported"
+        ),
     )
     q1e.add_argument("--json", action="store_true", help="emit JSON")
     q1e.add_argument("--out", metavar="FILE", help="write JSON report to FILE")

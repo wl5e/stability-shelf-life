@@ -1,9 +1,12 @@
 """End-to-end tests for the command-line interface."""
 
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -24,6 +27,15 @@ def _write_summary_csv(path):
         "0,100.0,A01\n3,98.0,A01\n6,96.0,A01\n",
         encoding="utf-8",
     )
+    return str(path)
+
+
+def _write_first_order_csv(path, rate=0.01, initial=100.0, times=(0, 3, 6, 9, 12)):
+    """Write a single batch whose exact first-order decay has a known rate."""
+    lines = ["time_months,assay_percent,batch_id"]
+    for t in times:
+        lines.append(f"{t},{initial * math.exp(-rate * t):.6f},A01")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return str(path)
 
 
@@ -101,3 +113,48 @@ def test_q1e_text_report_lists_each_limit():
     # Each limit is reported once per batch (two batches in the example data).
     assert res.stdout.count("limit 90%") >= 2
     assert res.stdout.count("limit 95%") >= 2
+
+
+def test_q1e_reports_release_limit_for_target_shelf_life(tmp_path):
+    # Exact first-order decay: k = 0.01 /month and C0 = 100%.
+    path = _write_first_order_csv(tmp_path / "first_order.csv")
+    res = _run_cli(
+        "q1e", "--input", path, "--limit", "90",
+        "--shelf-life", "24", "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    assert report["release_limit_shelf_life_months"] == 24.0
+
+    entry = report["batches"][0]
+    assert entry["best_model"] == "first-order"
+    release = entry["release_limits"]
+    assert len(release) == 1
+    item = release[0]
+    # First-order back-calculation: release = limit * exp(k * shelf life).
+    expected = 90.0 * math.exp(0.01 * 24.0)
+    assert item["limit"] == 90.0
+    assert item["release_limit_percent"] == pytest.approx(expected, rel=1e-3)
+    assert item["fitted_initial_percent"] == pytest.approx(100.0, rel=1e-3)
+    # 100% at release is not enough for a 24-month shelf life at 90%.
+    assert item["meets_release_limit"] is False
+
+
+def test_q1e_omits_release_limit_without_target_shelf_life():
+    res = _run_cli(
+        "q1e", "--input", "examples/stability_data.csv", "--limit", "90", "--json"
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    assert report["release_limit_shelf_life_months"] is None
+    assert report["batches"][0]["release_limits"] is None
+
+
+def test_q1e_text_report_prints_release_limit(tmp_path):
+    path = _write_first_order_csv(tmp_path / "first_order.csv")
+    res = _run_cli(
+        "q1e", "--input", path, "--limit", "90", "--shelf-life", "24",
+    )
+    assert res.returncode == 0, res.stderr
+    assert "release limit for 90% at 24 months" in res.stdout
+    assert "not satisfied" in res.stdout

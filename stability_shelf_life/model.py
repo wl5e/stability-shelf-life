@@ -427,6 +427,35 @@ def estimate_shelf_life(fit: KineticFit, limit: float) -> ShelfLife:
     )
 
 
+def release_limit(
+    fit: KineticFit, limit: float, shelf_life_months: float
+) -> float:
+    """Smallest release (t = 0) potency that still meets ``limit`` at expiry.
+
+    The shelf life answers "how long until the mean response reaches the
+    acceptance criterion?"; the release limit answers the inverse question:
+    given a target shelf life and a criterion, how much potency must the
+    batch have at release so that the fitted model still predicts ``limit``
+    at the end of that shelf life?
+
+        zero-order  : release = limit + rate * shelf_life_months
+        first-order : release = limit * exp(rate * shelf_life_months)
+
+    The release limit is therefore always at or above the acceptance
+    criterion.  When the fitted model detects no degradation (``rate`` of
+    zero) the response does not change over time, so the release limit
+    equals the criterion itself.  ``shelf_life_months`` must be
+    non-negative.
+    """
+    if shelf_life_months < 0.0:
+        raise StabilityError("shelf life must be non-negative")
+    if fit.rate <= 0.0:
+        return limit
+    if fit.order == 0:
+        return limit + fit.rate * shelf_life_months
+    return limit * math.exp(fit.rate * shelf_life_months)
+
+
 def rate_confidence_interval(fit: KineticFit) -> RateConfidenceInterval:
     """Two-sided 95% CI and one-sided 95% lower bound for a degradation rate.
 
