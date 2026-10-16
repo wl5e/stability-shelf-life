@@ -32,7 +32,7 @@ Keep entries concrete: what changes, and why it matters for GMP/ICH work.
 - [x] `data_summary_report` Print per-batch descriptive statistics (n, mean, sd, min, max) before fitting. | handler:
 - [x] `multi_limit_analysis` Evaluate shelf life at several specification limits (e.g. 90/95%) in one run. | handler:
 - [x] `release_limit` Compute and report the release limit separately from the shelf life. | handler:
-- [ ] `ascii_confidence_band` Render the fitted line, its 95% confidence band and the limit as ASCII. | handler:
+- [x] `ascii_confidence_band` Render the fitted line, its 95% confidence band and the limit as ASCII. | handler:
 - [ ] `ich_q1a_table` Emit an ICH Q1A/Q1E-style summary table for regulatory reporting. | handler:
 - [ ] `accelerated_shelf_life_matrix` Output a matrix of predicted shelf lives across storage temperatures. | handler:
 - [ ] `validation_dataset` Add a zero-order-dominated example dataset to exercise both kinetic models. | handler:
