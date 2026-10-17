@@ -187,3 +187,16 @@ def test_q1e_writes_ich_q1a_summary_table(tmp_path):
     ]
     # One row per batch per acceptance criterion (two batches, two limits).
     assert len(rows) == 4
+
+
+def test_q1e_bootstrap_adds_finite_lower_bound():
+    res = _run_cli(
+        "q1e", "--input", "examples/stability_data.csv",
+        "--limit", "90", "--bootstrap", "200", "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    for batch in report["batches"]:
+        lower = batch["shelf_life_by_limit"][0]["bootstrap_lower_95_months"]
+        assert lower is not None
+        assert math.isfinite(lower)

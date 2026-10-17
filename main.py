@@ -24,6 +24,7 @@ from typing import Optional, Sequence
 
 from stability_shelf_life import (
     StabilityError,
+    bootstrap_shelf_life_bca,
     degradation_rates_by_temperature,
     estimate_shelf_life,
     fit_arrhenius,
@@ -217,6 +218,8 @@ def _slope_difference_entry(
 def _run_q1e(args) -> int:
     batches = load_stability_data(args.input)
     limits = [float(limit) for limit in args.limit]
+    if args.bootstrap is not None and args.bootstrap < 2:
+        raise StabilityError("--bootstrap must be at least 2")
 
     report = {
         "limit": limits[0],
@@ -239,6 +242,18 @@ def _run_q1e(args) -> int:
         release_limits = []
         for limit in limits:
             shelf = estimate_shelf_life(best, limit)
+            bootstrap_lower = None
+            if shelf.stable and args.bootstrap is not None:
+                estimate = bootstrap_shelf_life_bca(
+                    batch.times,
+                    batch.values,
+                    best.order,
+                    limit,
+                    n_bootstrap=args.bootstrap,
+                    random_seed=0,
+                )
+                if math.isfinite(estimate):
+                    bootstrap_lower = round(estimate, 2)
             if shelf.stable:
                 shelf_lives.append(
                     {
@@ -249,6 +264,7 @@ def _run_q1e(args) -> int:
                         "shelf_life_lower_95_months": round(
                             shelf.lower_bound_months, 2
                         ),
+                        "bootstrap_lower_95_months": bootstrap_lower,
                     }
                 )
             else:
@@ -257,6 +273,7 @@ def _run_q1e(args) -> int:
                         "limit": limit,
                         "shelf_life_months": None,
                         "shelf_life_lower_95_months": None,
+                        "bootstrap_lower_95_months": None,
                     }
                 )
             if args.shelf_life is not None:
@@ -391,11 +408,18 @@ def _print_q1e_report(report) -> None:
             if item["shelf_life_months"] is None:
                 print("  -> no degradation detected (shelf life not estimable)")
             else:
+                bootstrap = item.get("bootstrap_lower_95_months")
+                bootstrap_text = (
+                    f", bootstrap lower bound {bootstrap} months"
+                    if bootstrap is not None
+                    else ""
+                )
                 print(
                     f"  -> best model: {entry['best_model']}, "
                     f"shelf life = {item['shelf_life_months']} months "
                     f"(95% lower bound "
-                    f"{item['shelf_life_lower_95_months']} months)"
+                    f"{item['shelf_life_lower_95_months']} months"
+                    f"{bootstrap_text})"
                 )
         else:
             print(f"  -> best model: {entry['best_model']}")
@@ -406,11 +430,18 @@ def _print_q1e_report(report) -> None:
                         "detected (shelf life not estimable)"
                     )
                 else:
+                    bootstrap = item.get("bootstrap_lower_95_months")
+                    bootstrap_text = (
+                        f", bootstrap lower bound {bootstrap} months"
+                        if bootstrap is not None
+                        else ""
+                    )
                     print(
                         f"     limit {item['limit']:g}%: shelf life = "
                         f"{item['shelf_life_months']} months "
                         f"(95% lower bound "
-                        f"{item['shelf_life_lower_95_months']} months)"
+                        f"{item['shelf_life_lower_95_months']} months"
+                        f"{bootstrap_text})"
                     )
         release_limits = entry.get("release_limits")
         if release_limits:
@@ -557,6 +588,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     q1e.add_argument("--json", action="store_true", help="emit JSON")
+    q1e.add_argument(
+        "--bootstrap",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "compute a BCa bootstrap one-sided 95% lower bound for each "
+            "shelf-life estimate using N resamples"
+        ),
+    )
     q1e.add_argument("--out", metavar="FILE", help="write JSON report to FILE")
     q1e.add_argument("--html", metavar="FILE", help="write standalone HTML report to FILE")
     q1e.add_argument(
