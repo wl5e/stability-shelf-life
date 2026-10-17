@@ -16,6 +16,8 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: pip install -r requirements.txt
+      - name: Validate backlog
+        run: python scripts/backlog.py --check
       - name: Compile
         run: python -m py_compile $(find . -name "*.py")
       - name: Tests

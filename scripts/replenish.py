@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Propose new backlog items when the active backlog runs low.
+"""Propose and promote new backlog items when the active queue runs low.
 
-Runs weekly (see ``.github/workflows/replenish.yml``). If ``BACKLOG.md`` has
-fewer than ``THRESHOLD`` undone items, it asks DeepSeek for a batch of new
-items and writes them to ``BACKLOG.proposed.md`` for human review.
+Runs weekly (see ``.github/workflows/replenish.yml``). When ``BACKLOG.md`` has
+at most ``THRESHOLD`` open items, it asks DeepSeek for a batch, keeps only
+proposals that carry the required metadata (``Acceptance:``, ``Demo:``,
+``Files:``), appends them to ``BACKLOG.proposed.md``, then automatically
+promotes the conforming ones with ``backlog.promote_safe()``.
 
-Proposals are NEVER auto-promoted: the human approves, then
-``scripts/promote.py`` moves the approved items into the active backlog.
-Pass ``--force`` to propose even when the backlog is not low (for a manual
-top-up).
+The old design required a human to run ``promote.py`` every week and overwrote
+the proposal file on every run. Both are fixed here. Pass ``--force`` to
+replenish even when the queue is healthy.
 """
 
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -22,9 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BACKLOG = ROOT / "BACKLOG.md"
 PROPOSED = ROOT / "BACKLOG.proposed.md"
-THRESHOLD = 7
-
-_ITEM_RE = re.compile(r"^- \[ \] `([^`]+)`")
+THRESHOLD = 15
+BATCH = 30
 
 
 def _run(cmd, **kwargs):
@@ -32,25 +31,24 @@ def _run(cmd, **kwargs):
 
 
 def undone_count() -> int:
-    return sum(
-        1 for line in BACKLOG.read_text(encoding="utf-8").splitlines() if _ITEM_RE.match(line)
-    )
+    import backlog
+
+    return len(backlog.parse_items(BACKLOG.read_text(encoding="utf-8")))
 
 
-def commit_proposals() -> None:
+def commit() -> None:
     env = {**os.environ}
     name = env.get("GIT_AUTHOR_NAME", "Collins Amatu Gorgerat")
     email = env.get("GIT_AUTHOR_EMAIL", "133529715+wl5e@users.noreply.github.com")
     _run(["git", "config", "user.name", name])
     _run(["git", "config", "user.email", email])
-    _run(["git", "add", "BACKLOG.proposed.md"])
-    res = _run(["git", "commit", "-m", "chore: propose backlog replenishment"])
+    _run(["git", "add", "BACKLOG.md", "BACKLOG.proposed.md"])
+    res = _run(["git", "commit", "-m", "chore: replenish backlog"])
     if res.returncode != 0:
-        return  # nothing new to commit (e.g. identical proposals) — fine
+        print("Nothing to commit.")
+        return
     push = _run(["git", "push"])
     if push.returncode != 0:
-        # Surface the error instead of silently dropping the commit, and retry
-        # once after rebasing in case main advanced since checkout.
         print(f"git push failed: {push.stderr.strip()}; rebasing and retrying.")
         rebase = _run(["git", "pull", "--rebase"])
         if rebase.returncode != 0:
@@ -58,6 +56,7 @@ def commit_proposals() -> None:
         push = _run(["git", "push"])
     if push.returncode != 0:
         raise RuntimeError(f"git push failed after retry: {push.stderr.strip()}")
+    print("Backlog replenished and pushed.")
 
 
 def main() -> int:
@@ -71,24 +70,49 @@ def main() -> int:
         print(f"{n} items pending (>{THRESHOLD}); no proposal needed.")
         return 0
 
+    import backlog
     import llm
-    items = llm.propose_items(10)
+
+    items = llm.propose_items(BATCH)
     if not items:
         print("DeepSeek returned no items.")
         return 1
 
-    header = (
-        "# Proposed items (awaiting review)\n"
-        "# Promote the ones you want with: python scripts/promote.py [slug ...]\n\n"
-    )
-    lines = [header]
+    existing = backlog.open_slugs() | backlog.proposed_slugs()
+    accepted = []
+    rejected = []
     for slug, title, why in items:
-        suffix = f" — {why}" if why else ""
-        lines.append(f"- [ ] `{slug}` {title}{suffix} | proposed\n")
-    PROPOSED.write_text("".join(lines), encoding="utf-8")
+        if slug in existing:
+            continue
+        errors = backlog.validate_title(slug, title)
+        if errors:
+            rejected.append((slug, errors))
+            continue
+        accepted.append((slug, title, why))
+        existing.add(slug)
 
-    print(f"Proposed {len(items)} items into BACKLOG.proposed.md")
-    commit_proposals()
+    header = (
+        "# Proposed items (awaiting promotion)\n"
+        "# Conforming proposals are promoted automatically by scripts/replenish.py\n\n"
+    )
+    if not PROPOSED.exists() or not PROPOSED.read_text(encoding="utf-8").strip():
+        PROPOSED.write_text(header, encoding="utf-8")
+
+    with PROPOSED.open("a", encoding="utf-8") as handle:
+        for slug, title, why in accepted:
+            suffix = f" — {why}" if why else ""
+            handle.write(f"- [ ] `{slug}` {title}{suffix} | proposed\n")
+
+    promoted = backlog.promote_safe()
+    print(
+        f"Proposed {len(accepted)} item(s) ({len(rejected)} rejected for missing "
+        f"metadata); promoted {promoted}."
+    )
+    for slug, errors in rejected:
+        print(f"  rejected {slug}: {'; '.join(errors)}")
+
+    if accepted or promoted:
+        commit()
     return 0
 
 

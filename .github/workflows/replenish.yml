@@ -14,15 +14,23 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: replenish-backlog
+  cancel-in-progress: false
+
 jobs:
   replenish:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Validate current backlog
+        run: python scripts/backlog.py --check
 
       - name: Propose backlog items if low
         run: python scripts/replenish.py ${{ github.event.inputs.force == 'true' && '--force' || '' }}
