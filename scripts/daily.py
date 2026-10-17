@@ -283,17 +283,13 @@ def run_tests():
 
 
 def _revert(written) -> None:
-    """Undo an implementation. Precise for LLM items, whole-tree otherwise."""
-    if written:
-        for rel, existed in written:
-            p = ROOT / rel
-            if existed:
-                _run(["git", "checkout", "--", rel])
-            elif p.exists():
-                p.unlink()
-    else:
-        _run(["git", "checkout", "--", "."])
-        _run(["git", "clean", "-fd", "--", "tests"])
+    """Undo only the files this attempt wrote (never the whole tree)."""
+    for rel, existed in written:
+        p = ROOT / rel
+        if existed:
+            _run(["git", "checkout", "--", rel])
+        elif p.exists():
+            p.unlink()
 
 
 def _changed_paths():
@@ -419,10 +415,16 @@ def _attempt(slug: str, title: str, handler_name: str, apply_only: bool) -> tupl
     for attempt in (1, 2, 3):
         try:
             subject, written = llm.implement(slug, title, feedback)
-        except Exception as exc:  # noqa: BLE001 - fail the item cleanly
+        except Exception as exc:  # noqa: BLE001 - transient provider/JSON failures
             print(f"LLM attempt {attempt} raised: {exc}")
             _revert(written)
-            return False, f"LLM error: {exc}"
+            written = []
+            feedback = (
+                f"Your previous response could not be used: {exc}. "
+                "Return ONLY a valid JSON object with the full content of each "
+                "changed file, and keep the change small."
+            )
+            continue
 
         if not written:
             print(f"Attempt {attempt}: the model changed nothing; retrying.")
