@@ -20,6 +20,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -82,11 +84,13 @@ SYSTEM_PROMPT = (
     "  workflow files are rejected by GitHub and the change will be discarded.\n"
     "- Follow the existing style: stdlib only, type hints, frozen dataclasses.\n"
     "- Return ONLY a JSON object, with this exact shape and no surrounding prose:\n"
-    '  {"summary": "<conventional commit subject>",\n'
-    '   "files": {"<relative/path>": "<full new file content>", ...}}\n'
-    '- "files" holds the FULL new content of every file you create or change.\n'
+    '  {"summary": "<conventional commit subject>", "patch": "<unified diff>"}\n'
+    '- "patch" must be a valid git unified diff that applies with `git apply`:\n'
+    "  include `diff --git a/<path> b/<path>`, `--- a/<path>`, `+++ b/<path>`\n"
+    "  and `@@` hunks, and use `/dev/null` for a new file. Send ONLY the changed\n"
+    "  lines plus a few lines of context — never the whole file.\n"
     "- You MUST change at least one file. There is no 'already satisfied' answer.\n"
-    "  If the item is genuinely impossible, return an empty files map with an\n"
+    "  If the item is genuinely impossible, return an empty patch with an\n"
     "  explanation; the run treats that as a failure."
 )
 
@@ -206,6 +210,53 @@ def _extract_json(content: str) -> dict:
     return obj
 
 
+def _run(cmd):
+    return subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True)
+
+
+def _patch_files(patch: str) -> List[Tuple[str, bool]]:
+    """Return ``(path, existed)`` for every file header in a unified diff."""
+    written: List[Tuple[str, bool]] = []
+    existed = True
+    for line in patch.splitlines():
+        if line.startswith("--- "):
+            existed = line[4:].strip() != "/dev/null"
+        elif line.startswith("+++ "):
+            target = line[4:].strip()
+            if target == "/dev/null":
+                raise RuntimeError("refusing a patch that deletes a file")
+            rel = target[2:] if target.startswith("b/") else target
+            if rel.startswith("/") or ".." in Path(rel).parts:
+                raise RuntimeError(f"refusing unsafe path in patch: {rel}")
+            if rel not in [p for p, _ in written]:
+                written.append((rel, existed))
+    if not written:
+        raise RuntimeError("patch contains no file headers")
+    return written
+
+
+def _apply_patch(patch: str) -> List[Tuple[str, bool]]:
+    """Validate and apply a unified diff; return the files it touched."""
+    if not patch.strip():
+        return []
+    if not patch.lstrip().startswith(("diff --git", "--- ")):
+        raise RuntimeError("response is not a unified diff")
+    files = _patch_files(patch)
+    handle = tempfile.NamedTemporaryFile("w", suffix=".patch", delete=False)
+    try:
+        handle.write(patch if patch.endswith("\n") else patch + "\n")
+        handle.close()
+        check = _run(["git", "apply", "--check", "--whitespace=nowarn", handle.name])
+        if check.returncode != 0:
+            raise RuntimeError(f"patch does not apply: {check.stderr.strip()[:500]}")
+        applied = _run(["git", "apply", "--whitespace=nowarn", handle.name])
+        if applied.returncode != 0:
+            raise RuntimeError(f"git apply failed: {applied.stderr.strip()[:500]}")
+    finally:
+        os.unlink(handle.name)
+    return files
+
+
 def implement(slug: str, description: str, feedback: str | None = None) -> Tuple[str, List[Tuple[str, bool]]]:
     """Implement one item via DeepSeek.
 
@@ -219,8 +270,8 @@ def implement(slug: str, description: str, feedback: str | None = None) -> Tuple
     )
     if feedback:
         user += (
-            "\n\nYour previous attempt did NOT pass the test suite or the scope "
-            "gate. Here is the output — fix it and return the corrected JSON:\n\n"
+            "\n\nYour previous attempt failed (tests, scope gate or patch "
+            "application). Here is the output — fix it and return the corrected JSON:\n\n"
             + feedback
         )
 
@@ -231,25 +282,12 @@ def implement(slug: str, description: str, feedback: str | None = None) -> Tuple
         ]
     )
     result = _extract_json(content)
-
-    files = result.get("files") or {}
-    if not files:
-        # Let daily.py treat this as a failed attempt and retry with feedback.
-        return result.get("summary") or f"chore: {slug}", []
-
-    written: List[Tuple[str, bool]] = []
-    for rel, text in files.items():
-        target = ROOT / rel
-        try:
-            target.resolve().relative_to(ROOT.resolve())
-        except ValueError as exc:
-            raise RuntimeError(f"refusing to write outside the repo: {rel}") from exc
-        existed = target.exists()
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
-        written.append((rel, existed))
-
-    return result.get("summary") or f"feat: {slug}", written
+    patch = result.get("patch") or ""
+    summary = result.get("summary") or f"feat: {slug}"
+    if not patch.strip():
+        return summary, []
+    written = _apply_patch(patch)
+    return summary, written
 
 
 def propose_items(count: int = 10):
