@@ -31,6 +31,7 @@ from stability_shelf_life import (
     load_accelerated_data,
     load_stability_data,
     predict_arrhenius_rate,
+    __version__,
 )
 from stability_shelf_life.model import (
     SlopeDifference,
@@ -526,6 +527,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="stability-shelf-life",
         description="Pharmaceutical stability shelf-life modelling (ICH Q1E + Arrhenius).",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

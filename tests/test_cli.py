@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from stability_shelf_life import __version__
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -18,6 +20,12 @@ def _run_cli(*args):
         capture_output=True,
         text=True,
     )
+
+
+def test_version_prints_package_version():
+    res = _run_cli("--version")
+    assert res.returncode == 0, res.stderr
+    assert __version__ in res.stdout
 
 
 def _write_summary_csv(path):

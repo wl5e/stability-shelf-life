@@ -16,7 +16,7 @@ refactors.
 
 ## Month 1 — expose the six capabilities that are already coded
 
-- [ ] `cli-version` Add `--version` to the CLI. Acceptance: the command prints the package version and exits 0; a subprocess test checks it. Demo: `python main.py --version`. Files: main.py, tests/test_cli.py | handler:
+- [x] `cli-version` Add `--version` to the CLI. Acceptance: the command prints the package version and exits 0; a subprocess test checks it. Demo: `python main.py --version`. Files: main.py, tests/test_cli.py | handler:
 - [ ] `q1e-bootstrap-cli` Expose the existing BCa bootstrap as `--bootstrap N`. Acceptance: `--bootstrap 200` adds a bootstrap lower bound to the report and a test asserts it is finite. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --bootstrap 200`. Files: main.py, tests/test_cli.py | handler:
 - [ ] `q1e-bootstrap-report` Add a bootstrap section to the text and JSON reports. Acceptance: both formats include the bootstrap bound when requested; a test checks both. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --bootstrap 200 --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
 - [ ] `q1e-residual-diagnostics` Wire the existing residual diagnostics into the Q1E report. Acceptance: the report exposes residual normality and runs-test results, covered by a test. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics`. Files: main.py, stability_shelf_life/report.py, tests/test_report.py | handler:
