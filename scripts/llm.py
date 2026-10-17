@@ -30,8 +30,8 @@ from typing import List, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 API_URL = "https://api.deepseek.com/chat/completions"
-DEFAULT_MODEL = "deepseek-v4-flash"
-MAX_TOKENS = 8000
+DEFAULT_MODEL = "deepseek-flash"
+MAX_TOKENS = 32000
 _RETRY_STATUS = {408, 429, 500, 502, 503, 504}
 
 BASE_FILES = [
@@ -147,6 +147,7 @@ def _call(messages) -> str:
             "messages": messages,
             "temperature": 0.2,
             "max_tokens": MAX_TOKENS,
+            "reasoning_effort": "low",
             "response_format": {"type": "json_object"},
         }
     ).encode("utf-8")
