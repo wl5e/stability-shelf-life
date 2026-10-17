@@ -65,6 +65,117 @@ def _write_text_report(content: str, output_path: str, label: str) -> None:
         ) from exc
 
 
+def _table_cell(value) -> str:
+    """Format a report value for the ICH summary table."""
+    if value is None:
+        return "N/A"
+    if isinstance(value, float):
+        return f"{value:g}"
+    return str(value)
+
+
+def _render_q1e_table(report) -> str:
+    """Render an ICH Q1A/Q1E-style plain-text regulatory summary table."""
+    batches = report.get("batches") or []
+    limits = report.get("limits") or [report.get("limit")]
+    include_release = any(batch.get("release_limits") for batch in batches)
+
+    header = [
+        "Batch",
+        "n",
+        "Model",
+        "Limit (%)",
+        "Rate",
+        "Rate unit",
+        "Initial (%)",
+        "R²",
+        "Shelf life (months)",
+        "95% lower (months)",
+    ]
+    if include_release:
+        header.append("Release limit (%)")
+
+    rows = []
+    for batch in batches:
+        models = batch.get("models") or []
+        best_model = batch.get("best_model")
+        best_initial = next(
+            (
+                model.get("initial_potency")
+                for model in models
+                if model.get("model") == best_model
+            ),
+            None,
+        )
+        shelf_lives = batch.get("shelf_life_by_limit")
+        if not shelf_lives:
+            shelf_lives = [
+                {
+                    "limit": report.get("limit"),
+                    "shelf_life_months": batch.get("shelf_life_months"),
+                    "shelf_life_lower_95_months": batch.get(
+                        "shelf_life_lower_95_months"
+                    ),
+                }
+            ]
+        release_by_limit = {
+            item.get("limit"): item
+            for item in (batch.get("release_limits") or [])
+        }
+        for item in shelf_lives:
+            row = [
+                _table_cell(batch.get("batch_id")),
+                _table_cell(batch.get("n_points")),
+                _table_cell(best_model),
+                _table_cell(item.get("limit")),
+                _table_cell(batch.get("best_rate")),
+                _table_cell(batch.get("best_rate_unit")),
+                _table_cell(best_initial),
+                _table_cell(batch.get("best_r_squared")),
+                _table_cell(item.get("shelf_life_months")),
+                _table_cell(item.get("shelf_life_lower_95_months")),
+            ]
+            if include_release:
+                release = release_by_limit.get(item.get("limit"))
+                row.append(
+                    _table_cell(release.get("release_limit_percent"))
+                    if release is not None
+                    else "N/A"
+                )
+            rows.append(row)
+
+    lines = ["ICH Q1A/Q1E stability summary", ""]
+    if limits:
+        if len(limits) == 1:
+            lines.append(f"Specification limit: {_table_cell(limits[0])}%")
+        else:
+            listed = ", ".join(f"{_table_cell(limit)}%" for limit in limits)
+            lines.append(f"Specification limits: {listed}")
+        lines.append("")
+    if not rows:
+        return "\n".join(lines).rstrip() + "\n"
+
+    widths = [len(column) for column in header]
+    for row in rows:
+        for index, cell in enumerate(row):
+            widths[index] = max(widths[index], len(cell))
+
+    separator = "  "
+    lines.append(
+        separator.join(
+            column.ljust(widths[index]) for index, column in enumerate(header)
+        )
+    )
+    lines.append(separator.join("-" * width for width in widths))
+    for row in rows:
+        lines.append(
+            separator.join(
+                cell.ljust(widths[index]) for index, cell in enumerate(row)
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _select_model(fits, times, values):
     """Choose between the zero- and first-order models by AIC.
 
@@ -219,6 +330,11 @@ def _run_q1e(args) -> int:
     if args.html:
         _write_text_report(
             render_html_report(report), args.html, "HTML report"
+        )
+
+    if args.table:
+        _write_text_report(
+            _render_q1e_table(report), args.table, "summary table"
         )
 
     if args.json:
@@ -437,6 +553,11 @@ def _build_parser() -> argparse.ArgumentParser:
     q1e.add_argument("--json", action="store_true", help="emit JSON")
     q1e.add_argument("--out", metavar="FILE", help="write JSON report to FILE")
     q1e.add_argument("--html", metavar="FILE", help="write standalone HTML report to FILE")
+    q1e.add_argument(
+        "--table",
+        metavar="FILE",
+        help="write an ICH Q1A/Q1E-style summary table to FILE",
+    )
 
     arr = sub.add_parser("arrhenius", help="Arrhenius extrapolation of accelerated data")
     arr.add_argument("--input", required=True, help="CSV: temperature_c,time_months,potency")

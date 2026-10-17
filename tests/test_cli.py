@@ -158,3 +158,24 @@ def test_q1e_text_report_prints_release_limit(tmp_path):
     assert res.returncode == 0, res.stderr
     assert "release limit for 90% at 24 months" in res.stdout
     assert "not satisfied" in res.stdout
+
+
+def test_q1e_writes_ich_q1a_summary_table(tmp_path):
+    table_path = tmp_path / "summary_table.txt"
+    res = _run_cli(
+        "q1e", "--input", "examples/stability_data.csv",
+        "--limit", "90", "95", "--table", str(table_path),
+    )
+    assert res.returncode == 0, res.stderr
+    text = table_path.read_text(encoding="utf-8")
+
+    assert "ICH Q1A/Q1E stability summary" in text
+    assert "Specification limits: 90%, 95%" in text
+    assert "Shelf life (months)" in text
+    assert "95% lower (months)" in text
+    rows = [
+        line for line in text.splitlines()
+        if line.startswith("A01") or line.startswith("B02")
+    ]
+    # One row per batch per acceptance criterion (two batches, two limits).
+    assert len(rows) == 4
