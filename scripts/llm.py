@@ -165,7 +165,16 @@ def _call(messages) -> str:
         try:
             with urllib.request.urlopen(req, timeout=180) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-            return data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            content = choice["message"].get("content") or ""
+            if not content:
+                print(
+                    "DeepSeek returned empty content: "
+                    f"finish_reason={choice.get('finish_reason')} "
+                    f"reasoning={bool(choice['message'].get('reasoning_content'))} "
+                    f"usage={data.get('usage')}"
+                )
+            return content
         except urllib.error.HTTPError as exc:
             body = exc.read().decode()[:300]
             last_error = f"DeepSeek HTTP {exc.code}: {body}"
