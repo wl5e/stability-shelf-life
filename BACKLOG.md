@@ -1,51 +1,89 @@
 # Backlog
 
-The daily automation (`scripts/daily.py`) consumes this list top-to-bottom:
-it takes the first undone item that has an implemented `handler:` and ships it
-only if the full test suite stays green. Items without a handler are
-implemented by the DeepSeek provider (`scripts/llm.py`), gated by the same
-test suite. Replenishment is handled by `scripts/replenish.py` (propose) and
-`scripts/promote.py` (approve).
+The daily automation (`scripts/daily.py`) consumes this list top-to-bottom on
+weekdays. Each item carries its own definition of done:
 
-Keep entries concrete: what changes, and why it matters for GMP/ICH work.
+- `Acceptance:` — the testable criterion the change must satisfy;
+- `Demo:` — the command a reviewer can run to see the result;
+- `Files:` — the files the change is expected to touch (at most 3).
 
-## Ready (implemented handlers)
+`scripts/backlog.py --check` validates the format. An item that fails three
+attempts is moved to `BACKLOG.blocked.md`; it is never silently checked off.
 
-- [x] `reject_nonfinite_inputs` Reject NaN/Inf in CSV loaders so bad data cannot corrupt a fit. | handler: reject_nonfinite_inputs
-- [x] `cli_end_to_end_test` Add the first end-to-end tests covering the CLI (q1e + arrhenius). | handler: cli_end_to_end_test
-- [x] `readme_worked_example` Add a worked example with real numbers to the README. | handler: readme_worked_example
+The order is deliberate: expose what already exists first, then add ICH logic,
+then audit/reporting/packaging. Visible CLI changes come before internal
+refactors.
 
-## Planned (need a handler)
+## Month 1 — expose the six capabilities that are already coded
 
-- [x] `bootstrap_confidence` Bootstrap BCa lower bound for the shelf life as a robustness check against the analytic bound. | handler:
-- [x] `pooled_batches` Pool batches that share a common slope (ICH Q1E batch pooling) with an ANCOVA test. | handler:
-- [x] `arrhenius_extrapolation_guard` Warn when the storage temperature falls outside the measured range. | handler:
-- [x] `json_report_file` Add `--out FILE` to persist the JSON report (GMP audit-trail artifact). | handler:
-- [x] `csv_encoding_bom` Accept UTF-8 with BOM in CSV inputs. | handler:
-- [x] `slope_difference_test` Report a statistical test for slope differences between batches. | handler:
-- [x] `outlier_diagnostic` Flag high-leverage / studentized-residual outliers in the fit. | handler:
-- [x] `html_report` Emit a standalone HTML report of the stability analysis. | handler:
-- [x] `pyproject_packaging` Add `pyproject.toml` so the package is pip-installable. | handler:
-- [x] `two_sided_ci` Report the two-sided 95% CI for the degradation rate alongside the one-sided bound. | handler:
-- [x] `aic_model_selection` Replace the R² tie-break with AIC/BIC for zero- vs first-order selection. | handler:
-- [x] `residual_diagnostics` Add residual normality and runs tests to flag a poor kinetic fit. | handler:
-- [x] `data_summary_report` Print per-batch descriptive statistics (n, mean, sd, min, max) before fitting. | handler:
-- [x] `multi_limit_analysis` Evaluate shelf life at several specification limits (e.g. 90/95%) in one run. | handler:
-- [x] `release_limit` Compute and report the release limit separately from the shelf life. | handler:
-- [x] `ascii_confidence_band` Render the fitted line, its 95% confidence band and the limit as ASCII. | handler:
-- [x] `ich_q1a_table` Emit an ICH Q1A/Q1E-style summary table for regulatory reporting. | handler:
-- [ ] `accelerated_shelf_life_matrix` Output a matrix of predicted shelf lives across storage temperatures. | handler:
-- [ ] `validation_dataset` Add a zero-order-dominated example dataset to exercise both kinetic models. | handler:
-- [ ] `error_codes` Give StabilityError a stable error code to aid GMP audit logging. | handler:
-- [ ] `readme_api_docs` Document the public Python API (functions and dataclasses) in the README. | handler:
+- [ ] `cli-version` Add `--version` to the CLI. Acceptance: the command prints the package version and exits 0; a subprocess test checks it. Demo: `python main.py --version`. Files: main.py, tests/test_cli.py | handler:
+- [ ] `q1e-bootstrap-cli` Expose the existing BCa bootstrap as `--bootstrap N`. Acceptance: `--bootstrap 200` adds a bootstrap lower bound to the report and a test asserts it is finite. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --bootstrap 200`. Files: main.py, tests/test_cli.py | handler:
+- [ ] `q1e-bootstrap-report` Add a bootstrap section to the text and JSON reports. Acceptance: both formats include the bootstrap bound when requested; a test checks both. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --bootstrap 200 --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `q1e-residual-diagnostics` Wire the existing residual diagnostics into the Q1E report. Acceptance: the report exposes residual normality and runs-test results, covered by a test. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics`. Files: main.py, stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `q1e-outlier-diagnostic` Flag outlier points in the Q1E fit. Acceptance: a synthetic outlier is flagged and the report lists it; a test covers the flag. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics`. Files: main.py, stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `q1e-pooling-cli` Expose the existing batch pooling as `--pool-batches`. Acceptance: the flag returns a pooled estimate and per-batch results still print; a test covers both. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --pool-batches`. Files: main.py, stability_shelf_life/pooling.py, tests/test_pooling.py | handler:
+- [ ] `q1e-pooling-report` Add a pooling section to the report. Acceptance: the report explains the pooling decision and the pooled shelf life; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --pool-batches --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `q1e-confidence-band-cli` Expose the existing ASCII confidence band as `--plot`. Acceptance: the command renders the band for every batch and a test checks the output contains the limit line. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --plot`. Files: main.py, stability_shelf_life/ascii_plot.py, tests/test_ascii_plot.py | handler:
+- [ ] `q1e-confidence-band-json` Add band points to the JSON report. Acceptance: the JSON includes time/potency band points when plotting is requested; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --plot --json`. Files: stability_shelf_life/report.py, stability_shelf_life/ascii_plot.py, tests/test_report.py | handler:
+- [ ] `q1e-release-limit-cli` Add a separate `--release-limit` option. Acceptance: the release limit and the shelf-life limit are reported independently; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --release-limit 95`. Files: main.py, tests/test_cli.py | handler:
+- [ ] `q1e-release-limit-report` Report the release limit alongside the shelf life. Acceptance: the JSON and text outputs name both limits; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --release-limit 95 --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `q1e-multi-limit` Evaluate several specification limits in one run. Acceptance: repeated `--limit` values produce one result per limit; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --limit 95`. Files: main.py, tests/test_cli.py | handler:
+- [ ] `q1e-forced-model` Add `--model {auto,zero,first}`. Acceptance: forcing a model changes the fit and is reported; a test covers auto and forced. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --model first`. Files: main.py, tests/test_cli.py | handler:
+- [ ] `q1e-extrapolation-warning` Warn when shelf life exceeds the study duration. Acceptance: a short study triggers the warning and a long one does not; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90`. Files: main.py, stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `q1e-positive-trend-warning` Warn when the fitted slope is positive. Acceptance: a rising synthetic series is flagged before clamping; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `q1e-parameter-validation` Validate limits and potency ranges. Acceptance: out-of-range limits raise a clear StabilityError and are tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 150`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
+- [ ] `q1e-error-codes` Add stable error codes to StabilityError. Acceptance: each validation error carries a code and a test asserts the code. Demo: `python main.py q1e --input examples/stability_data.csv --limit 150`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
+- [ ] `csv-delimiter-sniffing` Accept semicolon- and tab-delimited CSVs. Acceptance: both delimiters load correctly and are tested. Demo: `python main.py q1e --input examples/stability_data_semicolon.csv --limit 90`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
+- [ ] `readme-api-docs` Document the public API and its dataclasses. Acceptance: README has an API section covering every public function; checked by a test or a grep. Demo: `grep -q "## API" README.md`. Files: README.md | handler:
+- [ ] `readme-showcase` Add a "What shipped this quarter" section with the new commands. Acceptance: the section lists at least 10 commands and is checked by a test. Demo: `grep -q "What shipped this quarter" README.md`. Files: README.md, tests/test_readme.py | handler:
 
-- [ ] `arrhenius_rate_confidence_interval` Add confidence intervals to Arrhenius predictions — The Arrhenius command currently reports only a point prediction for the storage temperature, so no uncertainty is available for risk assessment. A 95% interval for the extrapolated rate would give a conservative upper rate basis for shelf-life decisions under ICH Q1E. | handler:
-- [ ] `overall_batch_shelf_life_summary` Summarize the recommended shelf life across batches — ICH Q1E ultimately assigns one regulatory shelf life; the CLI currently prints per-batch results only, requiring the user to manually identify the smallest lower bound and leaving no audit trace of that final decision. | handler:
-- [ ] `zero_order_arrhenius_support` Support zero-order kinetics in the Arrhenius workflow — Accelerated data are hard-coded to first-order rates, but zero-order degradation is equally accepted by ICH Q1E. Without this option, zero-order products will get systematically biased Arrhenius predictions and invalid extrapolated shelf lives. | handler:
-- [ ] `q1e_forced_model` Add a --model flag to force zero- or first-order in Q1E analysis — Regulatory stability protocols often prespecify the kinetic model; automatically picking the best R² fit can introduce post-hoc model selection, which is less defensible in GMP submissions and change control. | handler:
-- [ ] `audit_metadata` Embed audit metadata in JSON reports — GMP archives need software version, run timestamp, input-file hash and CLI parameters next to results; the current JSON output has no context to trace the analysis back to the exact files and settings used. | handler:
-- [ ] `q1e_extrapolation_warning` Warn when the Q1E shelf life exceeds the study time span — A shelf life projected beyond the longest measured time point is an extrapolation that ICH restricts; the report should flag when an estimated lower bound falls outside the covered stability data period. | handler:
-- [ ] `csv_delimiter_sniffing` Detect CSV delimiter automatically — Real-world stability exports are often semicolon- or tab-separated, especially from European Excel locales; hard-coded comma parsing can silently merge or split fields and corrupt a GMP dataset before any statistics run. | handler:
-- [ ] `accelerated_batch_identity` Accept optional batch_id in accelerated data and prevent silent pooling — The current accelerated loader pools all rows at a temperature as if from one batch; if a multi-batch accelerated study is loaded, batch-to-batch differences are hidden and the GMP analysis becomes invalid. | handler:
-- [ ] `validate_analysis_parameters` Reject physically impossible limits and potencies — Options such as --limit or --initial-potency are currently accepted without range checks, allowing nonsensical inputs (e.g., limit above 100 or zero initial potency) to produce fitted shelf lives that should never enter a regulatory report. | handler:
-- [ ] `positive_trend_warning` Warn when fitted model has a positive slope before truncating to zero rate — Current kinetic fitting clamps non-positive degradation rates to 0 and labels the batch stable, which can hide a rising potency trend that is physically implausible and should be investigated as assay or sample error. | handler:
+## Month 2 — ICH logic, validation, data handling
+
+- [ ] `q1e-decision-tree` Add an ICH Q1E decision summary to the report. Acceptance: the report states the decision (accept/reject/extrapolate) with reasons; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `q1a-significant-change` Implement ICH Q1A(R2) significant-change logic. Acceptance: a significant change is detected from the slope comparison and reported; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --significant-change`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `storage-zone-presets` Add storage-zone presets (I–IVb). Acceptance: `--zone IVb` selects the correct long-term and accelerated conditions; tested. Demo: `python main.py q1e --input examples/stability_data.csv --zone IVb`. Files: main.py, tests/test_cli.py | handler:
+- [ ] `extrapolation-factor` Compute the Q1E extrapolation factor from study duration. Acceptance: the factor follows the guideline table and is tested at boundary durations. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `minimum-data-check` Enforce the minimum timepoints and batches. Acceptance: too-short studies raise a clear error and valid ones pass; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
+- [ ] `intermediate-condition` Support an intermediate storage condition. Acceptance: the intermediate condition is parsed and reported; tested. Demo: `python main.py q1e --input examples/stability_data.csv --condition intermediate`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
+- [ ] `batch-pooling-decision` Report the pooled-vs-individual decision. Acceptance: the report explains why batches were pooled or not; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --pool-batches --json`. Files: stability_shelf_life/pooling.py, tests/test_pooling.py | handler:
+- [ ] `arrhenius-rate-ci` Add confidence intervals to Arrhenius predictions. Acceptance: the rate CI is finite and narrower with more points; tested. Demo: `python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --json`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `arrhenius-zero-order` Support zero-order accelerated kinetics. Acceptance: the zero-order path matches a known rate and is tested. Demo: `python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --model zero`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `accelerated-batch-identity` Accept an optional batch_id in accelerated data. Acceptance: the column is optional and grouped results are tested. Demo: `python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --json`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
+- [ ] `accelerated-shelf-life-matrix` Output a shelf-life matrix across temperatures. Acceptance: the matrix covers the requested temperatures and is tested. Demo: `python main.py arrhenius --input examples/accelerated_data.csv --temperatures 5,25,30 --json`. Files: main.py, stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `overall-batch-shelf-life` Report one regulatory shelf life across batches. Acceptance: the overall value is the minimum lower bound and is tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --overall`. Files: stability_shelf_life/pooling.py, stability_shelf_life/report.py, tests/test_pooling.py | handler:
+- [ ] `q1e-storage-zone-report` Include the storage zone and conditions in the report. Acceptance: the JSON names the zone and both conditions; tested. Demo: `python main.py q1e --input examples/stability_data.csv --zone II --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `q1e-data-summary` Add per-batch descriptive statistics before fitting. Acceptance: n, mean, SD, min and max are printed per batch; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `q1e-model-comparison` Report AIC/BIC for zero- and first-order fits. Acceptance: both criteria are reported and the selected model is the lower AIC; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `q1e-ci-level` Make the confidence level configurable. Acceptance: `--confidence 0.90` changes the bound and is tested against 0.95. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --confidence 0.90`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `q1e-weighted-regression` Add optional regression weights. Acceptance: weights change the fit as expected and are tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --weights 1,2,1,1`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `q1e-lack-of-fit` Add a lack-of-fit test for the kinetic model. Acceptance: a curved synthetic series is flagged and a linear one is not; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `q1e-units` Carry units through input and output. Acceptance: the report names months/%/temperature units and is tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/io.py, stability_shelf_life/report.py, tests/test_io.py | handler:
+- [ ] `q1e-locale-decimals` Accept comma decimal separators. Acceptance: a comma-decimal CSV loads correctly and is tested. Demo: `python main.py q1e --input examples/stability_data_comma.csv --limit 90`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
+
+## Month 3 — audit, reporting, packaging, performance
+
+- [ ] `audit-metadata` Add audit metadata to every JSON report. Acceptance: version, timestamp, input hash and CLI parameters are present; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `json-schema-version` Add a schema version to JSON output. Acceptance: the field is present and stable across runs; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `markdown-export` Add `--format markdown`. Acceptance: the report renders a valid Markdown table and is tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --format markdown`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `csv-export` Add `--format csv`. Acceptance: the report emits one row per batch with the expected columns; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --format csv`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `html-provenance` Add provenance to the HTML report. Acceptance: the HTML names the tool version, input and parameters; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --format html`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `arrhenius-table` Add an Arrhenius summary table. Acceptance: the table lists temperature, rate and predicted shelf life; tested. Demo: `python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --format markdown`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `q1e-table-provenance` Add provenance to the Q1A/Q1E summary table. Acceptance: the table names the source file and parameters; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --format markdown`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `report-diagnostics` Include residual diagnostics in every output format. Acceptance: text, JSON and Markdown carry the diagnostics; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `report-outliers` Include outlier flags in every output format. Acceptance: flagged points appear in text, JSON and Markdown; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `report-pooling` Include the pooling section in every output format. Acceptance: the pooled decision appears in text, JSON and Markdown; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --pool-batches --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `report-bootstrap` Include the bootstrap section in every output format. Acceptance: the bound appears in text, JSON and Markdown; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --bootstrap 200 --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `py-typed` Add the `py.typed` marker. Acceptance: the package ships `py.typed` and the packaging test checks it. Demo: `python -c "import stability_shelf_life, pathlib; print(pathlib.Path(stability_shelf_life.__file__).with_name('py.typed').exists())"`. Files: pyproject.toml, stability_shelf_life/py.typed | handler:
+- [ ] `changelog` Add a CHANGELOG covering releases and backlog items. Acceptance: the file follows Keep a Changelog and lists the current version; checked by a test. Demo: `grep -q "## \[2.0.0\]" CHANGELOG.md`. Files: CHANGELOG.md | handler:
+- [ ] `contributing` Add a CONTRIBUTING guide. Acceptance: the guide covers setup, tests and backlog item format; checked by a test. Demo: `test -f CONTRIBUTING.md`. Files: CONTRIBUTING.md | handler:
+- [ ] `code-of-conduct` Add a CODE_OF_CONDUCT. Acceptance: the file exists and names the reporting contact; checked by a test. Demo: `test -f CODE_OF_CONDUCT.md`. Files: CODE_OF_CONDUCT.md | handler:
+- [ ] `citation-cff` Add citation metadata. Acceptance: CITATION.cff validates and names the author and version; checked by a test. Demo: `python -c "import yaml; print(yaml.safe_load(open('CITATION.cff'))['title'])"`. Files: CITATION.cff | handler:
+- [ ] `readme-install-matrix` Document the supported Python versions and install options. Acceptance: the README lists 3.9–3.13 and pip/PyPI installs; checked by a grep test. Demo: `grep -q "Python 3.9" README.md`. Files: README.md | handler:
+- [ ] `readme-cli-reference` Add a complete CLI reference. Acceptance: every flag of both subcommands is documented; checked by a test. Demo: `grep -q "q1e --input" README.md`. Files: README.md | handler:
+- [ ] `readme-examples` Add more end-to-end examples. Acceptance: at least three commands with real output are documented; checked by a test. Demo: `grep -c "^python main.py" README.md`. Files: README.md | handler:
+- [ ] `performance-fit-cache` Cache repeated fits within a run. Acceptance: a repeated fit returns the cached result and the test asserts it. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --limit 95`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
+- [ ] `io-streaming` Stream large CSV inputs instead of loading them twice. Acceptance: a large file is read once and the result is unchanged; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
+- [ ] `error-messages` Make validation errors actionable. Acceptance: each error names the file, row, column and expected value; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 150`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
+- [ ] `q1e-batch-label` Add human-readable batch labels to output. Acceptance: labels appear in text and JSON and fall back to batch_id; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
+- [ ] `readme-limitations` Document assumptions, limits and rounding rules. Acceptance: the README has a limitations section covering all public calculations; checked by a test. Demo: `grep -q "## Limitations" README.md`. Files: README.md | handler:
+- [ ] `readme-showcase-q1` Refresh the showcase section with the quarter's new commands. Acceptance: the section lists the month 1–3 commands and is checked by a test. Demo: `grep -q "What shipped this quarter" README.md`. Files: README.md, tests/test_readme.py | handler:
