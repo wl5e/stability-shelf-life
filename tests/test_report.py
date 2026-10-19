@@ -1,5 +1,6 @@
 """Tests for the standalone HTML report (stability_shelf_life.report)."""
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -168,3 +169,48 @@ def test_cli_arrhenius_writes_html_report(tmp_path):
     document = out.read_text(encoding="utf-8")
     assert document.startswith("<!DOCTYPE html>")
     assert "Arrhenius" in document
+
+
+def test_render_q1e_report_includes_bootstrap_bound():
+    report = {
+        "limit": 90.0,
+        "batches": [
+            {
+                "batch_id": "A01",
+                "n_points": 5,
+                "best_model": "first-order",
+                "shelf_life_months": 24.35,
+                "shelf_life_lower_95_months": 21.87,
+                "shelf_life_by_limit": [
+                    {
+                        "limit": 90.0,
+                        "shelf_life_months": 24.35,
+                        "shelf_life_lower_95_months": 21.87,
+                        "bootstrap_lower_95_months": 20.5,
+                    }
+                ],
+                "models": [],
+            }
+        ],
+        "slope_difference": [],
+    }
+    document = render_html_report(report)
+    assert "Bootstrap lower bound" in document
+    assert "20.5" in document
+
+
+def test_cli_q1e_json_includes_bootstrap_bound():
+    res = _run_cli(
+        "q1e",
+        "--input",
+        "examples/stability_data.csv",
+        "--limit",
+        "90",
+        "--bootstrap",
+        "50",
+        "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    shelf_lives = report["batches"][0]["shelf_life_by_limit"]
+    assert "bootstrap_lower_95_months" in shelf_lives[0]

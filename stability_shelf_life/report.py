@@ -133,6 +133,43 @@ def _slope_table(tests: List[Mapping[str, Any]]) -> str:
     )
 
 
+def _shelf_life_table(entry: Mapping[str, Any]) -> str:
+    """Render per-limit shelf life with bootstrap bounds when present."""
+    shelf_lives = entry.get("shelf_life_by_limit")
+    if not shelf_lives:
+        return ""
+    has_bootstrap = any(
+        item.get("bootstrap_lower_95_months") is not None
+        for item in shelf_lives
+    )
+    rows = []
+    for item in shelf_lives:
+        shelf = item.get("shelf_life_months")
+        lower = item.get("shelf_life_lower_95_months")
+        cells = (
+            f"<td>{_e(item['limit'])}</td>"
+            f"<td>{_e('N/A' if shelf is None else shelf)}</td>"
+            f"<td>{_e('N/A' if lower is None else lower)}</td>"
+        )
+        if has_bootstrap:
+            bootstrap = item.get("bootstrap_lower_95_months")
+            bootstrap_text = "N/A" if bootstrap is None else bootstrap
+            cells += f"<td>{_e(bootstrap_text)}</td>"
+        rows.append(f"<tr>{cells}</tr>")
+    header = (
+        "<tr><th>Limit (%)</th><th>Shelf life (months)</th>"
+        "<th>95% lower bound (months)</th>"
+    )
+    if has_bootstrap:
+        header += "<th>Bootstrap lower bound (months)</th>"
+    header += "</tr>"
+    return (
+        "<table><caption>Shelf life by specification limit</caption>"
+        f"<thead>{header}</thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def _render_q1e(report: Mapping[str, Any]) -> str:
     """Render the body of an ICH Q1E report."""
     sections: List[str] = [
@@ -157,6 +194,7 @@ def _render_q1e(report: Mapping[str, Any]) -> str:
         sections.append(
             f'<h2>Batch {_e(entry["batch_id"])}</h2>'
             + _models_table(entry)
+            + _shelf_life_table(entry)
             + verdict
         )
 
