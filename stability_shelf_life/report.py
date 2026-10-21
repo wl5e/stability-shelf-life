@@ -133,6 +133,58 @@ def _slope_table(tests: List[Mapping[str, Any]]) -> str:
     )
 
 
+def _pooling_section(pooling: Mapping[str, Any]) -> str:
+    '''Render the ICH Q1E pooling decision and pooled shelf life.'''
+    can_pool = bool(pooling.get('can_pool'))
+    if can_pool:
+        explanation = (
+            'The common-slope test did not detect a significant difference '
+            'between batches, so the batches were pooled for shelf-life '
+            'estimation.'
+        )
+    else:
+        explanation = (
+            'The common-slope test detected a significant difference between '
+            'batches, so the batches were not pooled for shelf-life '
+            'estimation.'
+        )
+
+    pooled_shelf_life = pooling.get('pooled_shelf_life_months')
+    if pooled_shelf_life is None:
+        pooled_shelf_life = pooling.get('shelf_life_months')
+    lower = pooling.get('pooled_shelf_life_lower_95_months')
+    if lower is None:
+        lower = pooling.get('shelf_life_lower_95_months')
+    if pooled_shelf_life is None:
+        shelf_text = 'not reported'
+    else:
+        shelf_text = f'{pooled_shelf_life} months'
+        if lower is not None:
+            shelf_text += (
+                f' (one-sided 95% lower bound {lower} months)'
+            )
+
+    f_statistic = pooling.get('f_statistic')
+    f_text = 'inf' if f_statistic is None else str(f_statistic)
+    batches = pooling.get('batch_ids') or []
+    batch_text = ', '.join(str(batch) for batch in batches)
+    model = pooling.get('model', 'N/A')
+    p_value = pooling.get('p_value', 'N/A')
+    decision = 'pooled' if can_pool else 'not pooled'
+    return (
+        '<h2>Batch pooling (ICH Q1E)</h2>'
+        f'<p>{_e(explanation)}</p>'
+        '<table><caption>Pooling decision</caption><tbody>'
+        f'<tr><td>Decision</td><td>{_e(decision)}</td></tr>'
+        f'<tr><td>Model</td><td>{_e(model)}</td></tr>'
+        f'<tr><td>Batches</td><td>{_e(batch_text)}</td></tr>'
+        f'<tr><td>F statistic</td><td>{_e(f_text)}</td></tr>'
+        f'<tr><td>p-value</td><td>{_e(p_value)}</td></tr>'
+        f'<tr><td>Pooled shelf life</td><td>{_e(shelf_text)}</td></tr>'
+        '</tbody></table>'
+    )
+
+
 def _shelf_life_table(entry: Mapping[str, Any]) -> str:
     """Render per-limit shelf life with bootstrap bounds when present."""
     shelf_lives = entry.get("shelf_life_by_limit")
@@ -207,6 +259,10 @@ def _render_q1e(report: Mapping[str, Any]) -> str:
             "differ significantly.</p>"
             + _slope_table(slope_tests)
         )
+
+    pooling = report.get('pooling')
+    if pooling:
+        sections.append(_pooling_section(pooling))
 
     return "\n".join(sections)
 

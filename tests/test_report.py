@@ -214,3 +214,38 @@ def test_cli_q1e_json_includes_bootstrap_bound():
     report = json.loads(res.stdout)
     shelf_lives = report["batches"][0]["shelf_life_by_limit"]
     assert "bootstrap_lower_95_months" in shelf_lives[0]
+
+
+def test_render_q1e_report_includes_pooling_decision():
+    report = dict(_Q1E_REPORT)
+    report['pooling'] = {
+        'can_pool': True,
+        'model': 'first-order',
+        'batch_ids': ['A01', 'B02'],
+        'f_statistic': 0.4321,
+        'p_value': 0.6123,
+        'pooled_shelf_life_months': 22.15,
+        'pooled_shelf_life_lower_95_months': 21.02,
+    }
+    document = render_html_report(report)
+    assert 'Batch pooling' in document
+    assert 'did not detect a significant difference' in document
+    assert 'Pooled shelf life' in document
+    assert '22.15' in document
+    assert '21.02' in document
+
+
+def test_render_q1e_report_explains_rejected_pooling():
+    report = dict(_Q1E_REPORT)
+    report['pooling'] = {
+        'can_pool': False,
+        'model': 'first-order',
+        'batch_ids': ['A01', 'B02'],
+        'f_statistic': 9.876,
+        'p_value': 0.001,
+        'pooled_shelf_life_months': None,
+    }
+    document = render_html_report(report)
+    assert 'not pooled' in document
+    assert 'detected a significant difference' in document
+    assert 'not reported' in document
