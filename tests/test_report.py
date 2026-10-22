@@ -249,3 +249,36 @@ def test_render_q1e_report_explains_rejected_pooling():
     assert 'not pooled' in document
     assert 'detected a significant difference' in document
     assert 'not reported' in document
+
+
+def test_cli_q1e_json_includes_band_points():
+    res = _run_cli(
+        "q1e",
+        "--input",
+        "examples/stability_data.csv",
+        "--limit",
+        "90",
+        "--plot",
+        "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    points = report["batches"][0]["band_points"]
+    assert len(points) >= 2
+    first = points[0]
+    assert first["time_months"] == 0.0
+    assert first["lower"] <= first["mean"] <= first["upper"]
+
+
+def test_cli_q1e_json_omits_band_points_without_plot():
+    res = _run_cli(
+        "q1e",
+        "--input",
+        "examples/stability_data.csv",
+        "--limit",
+        "90",
+        "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    assert "band_points" not in report["batches"][0]

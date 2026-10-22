@@ -42,6 +42,7 @@ from stability_shelf_life.model import (
     release_limit,
     slope_difference_test,
 )
+from stability_shelf_life.ascii_plot import band_point_series
 from stability_shelf_life.report import render_html_report
 
 
@@ -331,6 +332,16 @@ def _run_q1e(args) -> int:
                     "r_squared": round(fit.r_squared, 5),
                 }
             )
+        if args.plot:
+            entry["band_points"] = [
+                {
+                    "time_months": round(point.time, 3),
+                    "mean": round(point.mean, 3),
+                    "lower": round(point.lower, 3),
+                    "upper": round(point.upper, 3),
+                }
+                for point in band_point_series(best, limits[0])
+            ]
         report["batches"].append(entry)
 
     for order in (0, 1):
@@ -588,6 +599,11 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     q1e.add_argument("--json", action="store_true", help="emit JSON")
+    q1e.add_argument(
+        "--plot",
+        action="store_true",
+        help="include confidence-band points in the JSON report",
+    )
     q1e.add_argument(
         "--bootstrap",
         type=int,

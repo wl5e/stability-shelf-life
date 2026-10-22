@@ -8,3 +8,5 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-10-20)
 - `q1e-pooling-cli` Expose the existing batch pooling as `--pool-batches`. Acceptance: the flag returns a pooled estimate and per-batch results still print; a test covers both. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --pool-batches`. Files: main.py, stability_shelf_life/pooling.py, tests/test_pooling.py
   blocked: 3 attempts failed (2026-10-20)
+- `q1e-confidence-band-cli` Expose the existing ASCII confidence band as `--plot`. Acceptance: the command renders the band for every batch and a test checks the output contains the limit line. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --plot`. Files: main.py, stability_shelf_life/ascii_plot.py, tests/test_ascii_plot.py
+  blocked: 3 attempts failed (2026-10-22)

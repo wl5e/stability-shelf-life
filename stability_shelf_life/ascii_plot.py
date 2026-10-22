@@ -27,7 +27,12 @@ from .model import (
     t_critical_two_sided,
 )
 
-__all__ = ["BandPoint", "confidence_band_point", "render_confidence_band"]
+__all__ = [
+    "BandPoint",
+    "band_point_series",
+    "confidence_band_point",
+    "render_confidence_band",
+]
 
 _MAX_EXPONENT = 700.0  # exp() overflow guard for very wide first-order bands
 
@@ -96,6 +101,30 @@ def _default_months(shelf: ShelfLife) -> float:
     if shelf.stable and math.isfinite(shelf.point_estimate_months):
         return max(1.0, math.ceil(shelf.point_estimate_months * 1.1))
     return 12.0
+
+
+def band_point_series(
+    fit: KineticFit,
+    limit: float,
+    count: int = 10,
+    months: Optional[float] = None,
+    one_sided: bool = True,
+) -> List[BandPoint]:
+    """Sample the fitted line and its confidence band at even time steps.
+
+    The series spans ``months`` (or 10% beyond the point-estimate shelf life
+    when omitted) in ``count`` evenly spaced points, starting at t = 0.  It is
+    the data behind :func:`render_confidence_band`, exposed so callers such as
+    the JSON report can serialise the band without re-deriving the statistics.
+    """
+    if count < 2:
+        raise ValueError("count must be at least 2")
+    shelf = estimate_shelf_life(fit, limit)
+    span = _default_months(shelf) if months is None else months
+    if span <= 0.0:
+        raise StabilityError("time range must be positive")
+    times = [span * index / (count - 1) for index in range(count)]
+    return [confidence_band_point(fit, time, one_sided) for time in times]
 
 
 def _tick_labels(span: float, width: int, count: int = 5) -> str:
