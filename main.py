@@ -225,6 +225,7 @@ def _run_q1e(args) -> int:
     report = {
         "limit": limits[0],
         "limits": limits,
+        "release_limit": args.release_limit,
         "release_limit_shelf_life_months": args.shelf_life,
         "batches": [],
         "slope_difference": [],
@@ -312,6 +313,15 @@ def _run_q1e(args) -> int:
             ],
             "shelf_life_by_limit": shelf_lives,
             "release_limits": release_limits or None,
+            "release_specification": (
+                {
+                    "release_limit": args.release_limit,
+                    "fitted_initial_percent": round(best.initial, 3),
+                    "meets_release_limit": best.initial >= args.release_limit,
+                }
+                if args.release_limit is not None
+                else None
+            ),
             "models": [],
         }
 
@@ -469,6 +479,18 @@ def _print_q1e_report(report) -> None:
                     f"(fitted initial {item['fitted_initial_percent']:g}%, "
                     f"{verdict})"
                 )
+        release_spec = entry.get("release_specification")
+        if release_spec:
+            verdict = (
+                "satisfied"
+                if release_spec["meets_release_limit"]
+                else "not satisfied"
+            )
+            print(
+                f"     release limit {release_spec['release_limit']:g}%: "
+                f"fitted initial {release_spec['fitted_initial_percent']:g}% "
+                f"({verdict})"
+            )
         print()
 
     slope_tests = report.get("slope_difference") or []
@@ -596,6 +618,16 @@ def _build_parser() -> argparse.ArgumentParser:
             "target shelf life in months; when given, the release limit "
             "(minimum t=0 potency that still meets each acceptance criterion "
             "at this shelf life) is computed and reported"
+        ),
+    )
+    q1e.add_argument(
+        "--release-limit",
+        type=float,
+        default=None,
+        metavar="PCT",
+        help=(
+            "release specification limit in percent, reported independently "
+            "of the shelf-life limit"
         ),
     )
     q1e.add_argument("--json", action="store_true", help="emit JSON")

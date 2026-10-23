@@ -200,3 +200,39 @@ def test_q1e_bootstrap_adds_finite_lower_bound():
         lower = batch["shelf_life_by_limit"][0]["bootstrap_lower_95_months"]
         assert lower is not None
         assert math.isfinite(lower)
+
+
+def test_q1e_release_limit_reported_independently():
+    res = _run_cli(
+        "q1e", "--input", "examples/stability_data.csv",
+        "--limit", "90", "--release-limit", "95", "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    # The shelf-life limit and the release limit are reported independently.
+    assert report["limit"] == 90.0
+    assert report["release_limit"] == 95.0
+    for batch in report["batches"]:
+        spec = batch["release_specification"]
+        assert spec["release_limit"] == 95.0
+        assert spec["fitted_initial_percent"] > 0
+        assert isinstance(spec["meets_release_limit"], bool)
+
+
+def test_q1e_release_limit_absent_by_default():
+    res = _run_cli(
+        "q1e", "--input", "examples/stability_data.csv", "--limit", "90", "--json"
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    assert report["release_limit"] is None
+    assert report["batches"][0]["release_specification"] is None
+
+
+def test_q1e_text_reports_release_limit():
+    res = _run_cli(
+        "q1e", "--input", "examples/stability_data.csv",
+        "--limit", "90", "--release-limit", "95",
+    )
+    assert res.returncode == 0, res.stderr
+    assert "release limit 95%" in res.stdout
