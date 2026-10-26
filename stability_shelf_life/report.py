@@ -222,11 +222,33 @@ def _shelf_life_table(entry: Mapping[str, Any]) -> str:
     )
 
 
+def _release_spec_table(entry: Mapping[str, Any]) -> str:
+    """Render the release-limit check for a batch when reported."""
+    spec = entry.get("release_specification")
+    if not spec:
+        return ""
+    verdict = (
+        "satisfied" if spec["meets_release_limit"] else "not satisfied"
+    )
+    css_class = "pass" if spec["meets_release_limit"] else "fail"
+    return (
+        "<table><caption>Release limit</caption><tbody>"
+        f"<tr><td>Release limit (%)</td><td>{_e(spec['release_limit'])}</td></tr>"
+        "<tr><td>Fitted initial potency (%)</td>"
+        f"<td>{_e(spec['fitted_initial_percent'])}</td></tr>"
+        f'<tr><td>Verdict</td><td class="{css_class}">{verdict}</td></tr>'
+        "</tbody></table>"
+    )
+
+
 def _render_q1e(report: Mapping[str, Any]) -> str:
     """Render the body of an ICH Q1E report."""
+    subtitle = f'Specification limit: {_e(report["limit"])}%'
+    if report.get("release_limit") is not None:
+        subtitle += f' &middot; Release limit: {_e(report["release_limit"])}%'
     sections: List[str] = [
         "<h1>ICH Q1E stability analysis</h1>",
-        f'<p class="subtitle">Specification limit: {_e(report["limit"])}%</p>',
+        f'<p class="subtitle">{subtitle}</p>',
     ]
 
     for entry in report.get("batches", []):
@@ -247,6 +269,7 @@ def _render_q1e(report: Mapping[str, Any]) -> str:
             f'<h2>Batch {_e(entry["batch_id"])}</h2>'
             + _models_table(entry)
             + _shelf_life_table(entry)
+            + _release_spec_table(entry)
             + verdict
         )
 

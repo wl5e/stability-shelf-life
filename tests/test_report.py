@@ -282,3 +282,54 @@ def test_cli_q1e_json_omits_band_points_without_plot():
     assert res.returncode == 0, res.stderr
     report = json.loads(res.stdout)
     assert "band_points" not in report["batches"][0]
+
+
+def test_render_q1e_report_names_release_limit():
+    report = dict(_Q1E_REPORT)
+    report["release_limit"] = 95.0
+    batch = dict(_Q1E_REPORT["batches"][0])
+    batch["release_specification"] = {
+        "release_limit": 95.0,
+        "fitted_initial_percent": 100.05,
+        "meets_release_limit": True,
+    }
+    report["batches"] = [batch]
+    document = render_html_report(report)
+    assert "Specification limit" in document
+    assert "Release limit" in document
+    assert "95.0" in document
+    assert "100.05" in document
+    assert "satisfied" in document
+
+
+def test_cli_q1e_outputs_name_both_limits():
+    res = _run_cli(
+        "q1e",
+        "--input",
+        "examples/stability_data.csv",
+        "--limit",
+        "90",
+        "--release-limit",
+        "95",
+        "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    assert report["limit"] == 90.0
+    assert report["release_limit"] == 95.0
+    spec = report["batches"][0]["release_specification"]
+    assert spec["release_limit"] == 95.0
+
+
+def test_cli_q1e_text_output_names_both_limits():
+    res = _run_cli(
+        "q1e",
+        "--input",
+        "examples/stability_data.csv",
+        "--limit",
+        "90",
+        "--release-limit",
+        "95",
+    )
+    assert res.returncode == 0, res.stderr
+    assert "Specification limit: 90" in res.stdout
