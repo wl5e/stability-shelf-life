@@ -605,6 +605,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--limit",
         type=float,
         nargs="+",
+        action="extend",
         required=True,
         metavar="PCT",
         help="acceptance criterion/criteria in percent (one or more, e.g. --limit 90 95)",

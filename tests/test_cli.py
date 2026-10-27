@@ -236,3 +236,17 @@ def test_q1e_text_reports_release_limit():
     )
     assert res.returncode == 0, res.stderr
     assert "release limit 95%" in res.stdout
+
+
+def test_q1e_accepts_repeated_limit_flags():
+    res = _run_cli(
+        "q1e", "--input", "examples/stability_data.csv",
+        "--limit", "90", "--limit", "95", "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    assert report["limits"] == [90.0, 95.0]
+    for batch in report["batches"]:
+        assert [
+            item["limit"] for item in batch["shelf_life_by_limit"]
+        ] == [90.0, 95.0]
