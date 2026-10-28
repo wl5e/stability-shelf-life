@@ -79,6 +79,16 @@ def test_kinetics_rejects_non_positive_values():
         fit_kinetics([0.0, 1.0, 2.0], [100.0, 0.0, 50.0], order=1)
 
 
+def test_fit_kinetics_warns_on_positive_slope_before_clamping():
+    # A rising potency series has a positive slope; the model clamps the
+    # degradation rate to zero but must first warn the fit is non-physical.
+    times = [0.0, 3.0, 6.0, 9.0, 12.0]
+    values = [100.0 + 0.5 * t for t in times]
+    with pytest.warns(UserWarning, match="positive slope"):
+        fit = fit_kinetics(times, values, order=0)
+    assert fit.rate == 0.0
+
+
 def test_shelf_life_point_estimate_and_lower_bound():
     k_true = 0.0045
     times = [0.0, 3.0, 6.0, 9.0, 12.0, 18.0, 24.0]

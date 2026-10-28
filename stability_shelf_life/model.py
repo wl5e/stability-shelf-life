@@ -359,6 +359,14 @@ def fit_kinetics(times: Sequence[float], values: Sequence[float], order: int) ->
 
     if rate <= 0:
         # No degradation detected — model exists but shelf life is not bounded.
+        if regression.slope > 0:
+            warnings.warn(
+                "kinetic fit has a positive slope (potency rises over time); "
+                "the degradation rate is clamped to zero and shelf life is "
+                "not estimable",
+                UserWarning,
+                stacklevel=2,
+            )
         return KineticFit(
             order=order, regression=regression, rate=0.0,
             initial=initial, r_squared=regression.r_squared,
