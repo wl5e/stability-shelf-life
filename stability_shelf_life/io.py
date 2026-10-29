@@ -37,6 +37,21 @@ def _open_csv(path: str):
     return handle
 
 
+def _sniff_delimiter(handle) -> str:
+    """Detect a comma, semicolon or tab delimiter from the CSV header."""
+    sample = handle.readline()
+    handle.seek(0)
+    if not sample:
+        return ","
+    counts = {
+        ",": sample.count(","),
+        ";": sample.count(";"),
+        "\t": sample.count("\t"),
+    }
+    delimiter = max(counts, key=counts.get)
+    return delimiter if counts[delimiter] > 0 else ","
+
+
 def _require_columns(fieldnames, required, path):
     if fieldnames is None:
         raise StabilityError(f"{path}: CSV header is missing")
@@ -52,7 +67,8 @@ def load_stability_data(path: str) -> Dict[str, StabilityBatch]:
     Returns a mapping of batch id to time/value series.
     """
     with _open_csv(path) as handle:
-        reader = csv.DictReader(handle)
+        delimiter = _sniff_delimiter(handle)
+        reader = csv.DictReader(handle, delimiter=delimiter)
         _require_columns(reader.fieldnames, {"time_months", "assay_percent", "batch_id"}, path)
 
         data: Dict[str, List[List[float]]] = defaultdict(lambda: [[], []])
@@ -97,7 +113,8 @@ def load_accelerated_data(path: str) -> AcceleratedData:
     Expected columns: ``temperature_c``, ``time_months``, ``potency``.
     """
     with _open_csv(path) as handle:
-        reader = csv.DictReader(handle)
+        delimiter = _sniff_delimiter(handle)
+        reader = csv.DictReader(handle, delimiter=delimiter)
         _require_columns(
             reader.fieldnames, {"temperature_c", "time_months", "potency"}, path
         )

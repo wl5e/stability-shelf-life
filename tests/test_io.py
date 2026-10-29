@@ -72,3 +72,27 @@ def test_load_accelerated_data_rejects_non_finite(tmp_path):
     )
     with pytest.raises(StabilityError, match="non-finite"):
         load_accelerated_data(str(p))
+
+
+def test_load_stability_data_semicolon_delimited(tmp_path):
+    p = tmp_path / "semicolon.csv"
+    _write(
+        p,
+        "time_months;assay_percent;batch_id\n"
+        "0;100.1;A01\n3;98.9;A01\n6;97.6;A01\n",
+    )
+    batches = load_stability_data(str(p))
+    assert set(batches) == {"A01"}
+    assert batches["A01"].times == [0.0, 3.0, 6.0]
+
+
+def test_load_accelerated_data_tab_delimited(tmp_path):
+    p = tmp_path / "tab.csv"
+    _write(
+        p,
+        "temperature_c\ttime_months\tpotency\n"
+        "40\t0\t100\n40\t3\t97\n50\t0\t100\n50\t3\t94\n",
+    )
+    data = load_accelerated_data(str(p))
+    assert len(data.times) == 4
+    assert set(data.temperatures) == {40.0, 50.0}

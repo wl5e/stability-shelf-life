@@ -14,3 +14,7 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-10-28)
 - `q1e-extrapolation-warning` Warn when shelf life exceeds the study duration. Acceptance: a short study triggers the warning and a long one does not; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90`. Files: main.py, stability_shelf_life/report.py, tests/test_report.py
   blocked: 3 attempts failed (2026-10-28)
+- `q1e-parameter-validation` Validate limits and potency ranges. Acceptance: out-of-range limits raise a clear StabilityError and are tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 150`. Files: stability_shelf_life/io.py, tests/test_io.py
+  blocked: 3 attempts failed (2026-10-29)
+- `q1e-error-codes` Add stable error codes to StabilityError. Acceptance: each validation error carries a code and a test asserts the code. Demo: `python main.py q1e --input examples/stability_data.csv --limit 150`. Files: stability_shelf_life/io.py, tests/test_io.py
+  blocked: 3 attempts failed (2026-10-29)
