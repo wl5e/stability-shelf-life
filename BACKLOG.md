@@ -26,7 +26,7 @@ refactors.
 - [x] `q1e-multi-limit` Evaluate several specification limits in one run. Acceptance: repeated `--limit` values produce one result per limit; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --limit 95`. Files: main.py, tests/test_cli.py | handler:
 - [x] `q1e-positive-trend-warning` Warn when the fitted slope is positive. Acceptance: a rising synthetic series is flagged before clamping; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
 - [x] `csv-delimiter-sniffing` Accept semicolon- and tab-delimited CSVs. Acceptance: both delimiters load correctly and are tested. Demo: `python main.py q1e --input examples/stability_data_semicolon.csv --limit 90`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
-- [ ] `readme-api-docs` Document the public API and its dataclasses. Acceptance: README has an API section covering every public function; checked by a test or a grep. Demo: `grep -q "## API" README.md`. Files: README.md | handler:
+- [x] `readme-api-docs` Document the public API and its dataclasses. Acceptance: README has an API section covering every public function; checked by a test or a grep. Demo: `grep -q "## API" README.md`. Files: README.md | handler:
 - [ ] `readme-showcase` Add a "What shipped this quarter" section with the new commands. Acceptance: the section lists at least 10 commands and is checked by a test. Demo: `grep -q "What shipped this quarter" README.md`. Files: README.md, tests/test_readme.py | handler:
 
 ## Month 2 — ICH logic, validation, data handling

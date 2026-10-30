@@ -114,6 +114,72 @@ Predicted rate: 0.003004 /month
 Predicted shelf life to 90%: 35.08 months (2.92 years)
 ```
 
+## API
+
+The public surface is re-exported from `stability_shelf_life` (see
+`stability_shelf_life.__all__`). All functions are pure Python and use only
+the standard library.
+
+### Input loaders
+
+- `load_stability_data(path: str) -> Dict[str, StabilityBatch]` — read the
+  long-term stability CSV (`time_months`, `assay_percent`, `batch_id`) and
+  return per-batch time/value series.
+- `load_accelerated_data(path: str) -> AcceleratedData` — read the accelerated
+  CSV (`temperature_c`, `time_months`, `potency`).
+
+### Kinetics and shelf life
+
+- `fit_kinetics(times, values, order: int) -> KineticFit` — least-squares fit
+  for order `0` (zero-order) or `1` (first-order).
+- `estimate_shelf_life(fit: KineticFit, limit: float) -> ShelfLife` — ICH Q1E
+  point estimate and one-sided 95% lower confidence bound at `limit` percent.
+- `bootstrap_shelf_life_bca(times, values, order, limit, ...) -> float` — BCa
+  bootstrap one-sided 95% lower bound for the shelf life.
+- `confidence_band_point(...) -> BandPoint` — evaluate the fitted confidence
+  band at one time point.
+- `render_confidence_band(...) -> str` — render an ASCII confidence-band plot.
+- `outlier_diagnostic(...) -> OutlierDiagnostic` — per-point residual/outlier
+  diagnostic.
+- `residual_diagnostics(...) -> ResidualDiagnostics` — residual summary and
+  normality/runs diagnostics.
+- `residual_normality(...) -> ResidualNormality` — residual normality test
+  result.
+- `runs_test(...) -> RunsTest` — runs test for residual randomness.
+- `pool_batches(...) -> PooledBatchResult` — pool compatible batches for a
+  common slope estimate.
+
+### Arrhenius extrapolation
+
+- `degradation_rates_by_temperature(times, temperatures, values) ->`
+  `Dict[float, KineticFit]` — fit first-order rates at each accelerated
+  temperature.
+- `fit_arrhenius(temperatures, rates) -> ArrheniusFit` — fit
+  `ln(k) = ln(A) - Ea/(R T)`.
+- `predict_arrhenius_rate(fit: ArrheniusFit, storage_temp) -> float` — predict
+  the rate at a long-term storage temperature.
+
+### Dataclasses and exceptions
+
+- `StabilityBatch` — per-batch id, times, and assay values returned by
+  `load_stability_data`.
+- `AcceleratedData` — accelerated times, temperatures, and potency values.
+- `KineticFit` — fitted kinetic order, rate, initial potency, R², and
+  coefficient standard errors.
+- `ShelfLife` — point estimate, lower bound, and stability flag for one limit.
+- `ArrheniusFit` — activation energy, pre-exponential factor, and R².
+- `BandPoint` — time, mean, and lower/upper confidence-band values.
+- `OutlierDiagnostic` — residual, leverage, and outlier flag for one point.
+- `ResidualDiagnostics` — residual summary and associated statistics.
+- `ResidualNormality` — normality test statistic and p-value.
+- `RunsTest` — runs statistic and p-value.
+- `PooledBatchResult` — pooled slope/statistics for multiple compatible
+  batches.
+- `StabilityError` — exception raised for malformed input or non-physical
+  fits.
+
+`__version__` exposes the package version string.
+
 ## How the statistics work
 
 For first-order kinetics, `ln(potency)` is regressed against time; for
