@@ -41,6 +41,27 @@ approximated.
 - Standard library only; the one-sided t-critical values are tabulated for
   1–30 degrees of freedom and use the normal quantile beyond that.
 
+## What shipped this quarter
+
+The following command-line workflows are new or newly documented this quarter:
+
+```bash
+python main.py q1e --input examples/stability_data.csv --limit 90
+python main.py q1e --input examples/stability_data.csv --limit 90 95
+python main.py q1e --input examples/stability_data.csv --limit 90 --json
+python main.py q1e --input examples/stability_data.csv --limit 90 --out report.json
+python main.py q1e --input examples/stability_data.csv --limit 90 --html report.html
+python main.py q1e --input examples/stability_data.csv --limit 90 --table summary.txt
+python main.py q1e --input examples/stability_data.csv --limit 90 --plot --json
+python main.py q1e --input examples/stability_data.csv --limit 90 --bootstrap 1000
+python main.py q1e --input examples/stability_data.csv --limit 90 --shelf-life 24
+python main.py q1e --input examples/stability_data.csv --limit 90 --release-limit 95
+python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25
+python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --json
+python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --out report.json
+python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --html report.html
+```
+
 ## Installation
 
 Requires Python 3.9+.
