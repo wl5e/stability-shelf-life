@@ -18,3 +18,9 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-10-29)
 - `q1e-error-codes` Add stable error codes to StabilityError. Acceptance: each validation error carries a code and a test asserts the code. Demo: `python main.py q1e --input examples/stability_data.csv --limit 150`. Files: stability_shelf_life/io.py, tests/test_io.py
   blocked: 3 attempts failed (2026-10-29)
+- `q1e-decision-tree` Add an ICH Q1E decision summary to the report. Acceptance: the report states the decision (accept/reject/extrapolate) with reasons; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-03)
+- `q1a-significant-change` Implement ICH Q1A(R2) significant-change logic. Acceptance: a significant change is detected from the slope comparison and reported; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --significant-change`. Files: stability_shelf_life/model.py, tests/test_model.py
+  blocked: 3 attempts failed (2026-11-03)
+- `storage-zone-presets` Add storage-zone presets (I–IVb). Acceptance: `--zone IVb` selects the correct long-term and accelerated conditions; tested. Demo: `python main.py q1e --input examples/stability_data.csv --zone IVb`. Files: main.py, tests/test_cli.py
+  blocked: 3 attempts failed (2026-11-03)

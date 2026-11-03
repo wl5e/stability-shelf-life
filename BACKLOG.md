@@ -31,9 +31,6 @@ refactors.
 
 ## Month 2 — ICH logic, validation, data handling
 
-- [ ] `q1e-decision-tree` Add an ICH Q1E decision summary to the report. Acceptance: the report states the decision (accept/reject/extrapolate) with reasons; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/report.py, tests/test_report.py | handler:
-- [ ] `q1a-significant-change` Implement ICH Q1A(R2) significant-change logic. Acceptance: a significant change is detected from the slope comparison and reported; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --significant-change`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
-- [ ] `storage-zone-presets` Add storage-zone presets (I–IVb). Acceptance: `--zone IVb` selects the correct long-term and accelerated conditions; tested. Demo: `python main.py q1e --input examples/stability_data.csv --zone IVb`. Files: main.py, tests/test_cli.py | handler:
 - [ ] `extrapolation-factor` Compute the Q1E extrapolation factor from study duration. Acceptance: the factor follows the guideline table and is tested at boundary durations. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/model.py, tests/test_model.py | handler:
 - [ ] `minimum-data-check` Enforce the minimum timepoints and batches. Acceptance: too-short studies raise a clear error and valid ones pass; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
 - [ ] `intermediate-condition` Support an intermediate storage condition. Acceptance: the intermediate condition is parsed and reported; tested. Demo: `python main.py q1e --input examples/stability_data.csv --condition intermediate`. Files: stability_shelf_life/io.py, tests/test_io.py | handler:
