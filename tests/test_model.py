@@ -8,6 +8,7 @@ from stability_shelf_life.model import (
     StabilityError,
     degradation_rates_by_temperature,
     estimate_shelf_life,
+    extrapolation_factor,
     f_test_p_value,
     fit_arrhenius,
     fit_kinetics,
@@ -419,3 +420,25 @@ def test_residual_diagnostics_rejects_exact_fit():
     fit = fit_kinetics(times, values, order=0)
     with pytest.raises(StabilityError, match="non-zero"):
         residual_diagnostics(fit, times, values)
+
+
+def test_extrapolation_factor_follows_guideline_table():
+    # Below 3 months no extrapolation is permitted.
+    assert extrapolation_factor(0.0) == 1.0
+    assert extrapolation_factor(2.99) == 1.0
+    # 3 months reaches the 1.25 tier.
+    assert extrapolation_factor(3.0) == 1.25
+    assert extrapolation_factor(5.99) == 1.25
+    # 6 months reaches the 1.5 tier.
+    assert extrapolation_factor(6.0) == 1.5
+    assert extrapolation_factor(11.99) == 1.5
+    # 12 months permits the maximum factor of 2.
+    assert extrapolation_factor(12.0) == 2.0
+    assert extrapolation_factor(36.0) == 2.0
+
+
+def test_extrapolation_factor_rejects_invalid_duration():
+    with pytest.raises(StabilityError, match="non-negative"):
+        extrapolation_factor(-1.0)
+    with pytest.raises(StabilityError, match="finite"):
+        extrapolation_factor(math.inf)

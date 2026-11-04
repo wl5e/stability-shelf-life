@@ -198,6 +198,37 @@ def t_critical_two_sided(df: int) -> float:
     return _T_CRITICAL_TABLE_TWO_SIDED.get(df, _NORMAL_QUANTILE_975)
 
 
+# ICH Q1E extrapolation table: upper bounds on the long-term study duration
+# (months) and the maximum extrapolation factor permitted below each bound.
+_EXTRAPOLATION_TABLE = (
+    (3.0, 1.0),
+    (6.0, 1.25),
+    (12.0, 1.5),
+)
+_MAX_EXTRAPOLATION_FACTOR = 2.0
+
+
+def extrapolation_factor(study_duration_months: float) -> float:
+    """Maximum ICH Q1E extrapolation factor for a long-term study duration.
+
+    When accelerated data show no significant change, ICH Q1E permits the
+    shelf life supported by long-term data to be extrapolated by a factor
+    that grows with how much long-term data are available.  The factor is
+    1.0 (no extrapolation) below 3 months, then 1.25, 1.5 and 2.0 as the
+    study duration reaches 3, 6 and 12 months respectively.
+
+    ``study_duration_months`` must be finite and non-negative.
+    """
+    if not math.isfinite(study_duration_months):
+        raise StabilityError("study duration must be finite")
+    if study_duration_months < 0.0:
+        raise StabilityError("study duration must be non-negative")
+    for upper_bound, factor in _EXTRAPOLATION_TABLE:
+        if study_duration_months < upper_bound:
+            return factor
+    return _MAX_EXTRAPOLATION_FACTOR
+
+
 def _beta_continued_fraction(a: float, b: float, x: float) -> float:
     """Continued-fraction expansion of the incomplete beta (Lentz's method)."""
     max_iterations = 200
