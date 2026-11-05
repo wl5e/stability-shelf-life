@@ -11,6 +11,12 @@ from typing import Dict, List
 
 from .model import StabilityError
 
+# ICH stability modelling needs at least three time points per batch so the
+# regression retains positive residual degrees of freedom. A single batch is
+# valid input at this layer; pooling validates the batch count separately.
+MIN_TIMEPOINTS_PER_BATCH = 3
+MIN_BATCHES = 1
+
 
 @dataclass(frozen=True)
 class StabilityBatch:
@@ -101,8 +107,18 @@ def load_stability_data(path: str) -> Dict[str, StabilityBatch]:
     for batch_id, (times, values) in data.items():
         if len(set(times)) != len(times):
             raise StabilityError(f"batch {batch_id}: duplicate time points")
+        if len(times) < MIN_TIMEPOINTS_PER_BATCH:
+            raise StabilityError(
+                f"batch {batch_id}: at least {MIN_TIMEPOINTS_PER_BATCH} "
+                f"time points are required, found {len(times)}"
+            )
         result[batch_id] = StabilityBatch(
             batch_id=batch_id, times=times, values=values
+        )
+    if len(result) < MIN_BATCHES:
+        raise StabilityError(
+            f"{path}: at least {MIN_BATCHES} batches are required, "
+            f"found {len(result)}"
         )
     return result
 

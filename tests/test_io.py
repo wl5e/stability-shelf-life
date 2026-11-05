@@ -96,3 +96,14 @@ def test_load_accelerated_data_tab_delimited(tmp_path):
     data = load_accelerated_data(str(p))
     assert len(data.times) == 4
     assert set(data.temperatures) == {40.0, 50.0}
+
+
+def test_load_stability_data_rejects_too_few_timepoints(tmp_path):
+    p = tmp_path / "short.csv"
+    _write(
+        p,
+        "time_months,assay_percent,batch_id\n"
+        "0,100,A01\n3,97,A01\n",
+    )
+    with pytest.raises(StabilityError, match="at least 3"):
+        load_stability_data(str(p))
