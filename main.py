@@ -31,6 +31,7 @@ from stability_shelf_life import (
     fit_kinetics,
     load_accelerated_data,
     load_stability_data,
+    pool_batches,
     predict_arrhenius_rate,
     __version__,
 )
@@ -363,6 +364,23 @@ def _run_q1e(args) -> int:
             _slope_difference_entry(order, ids_by_order[order], comparison)
         )
 
+    if args.pool_batches and len(batches) >= 2:
+        batch_ids = sorted(batches)
+        times_by_batch = {bid: batches[bid].times for bid in batch_ids}
+        values_by_batch = {bid: batches[bid].values for bid in batch_ids}
+        pooled = pool_batches(times_by_batch, values_by_batch, order=1)
+        report["pooling"] = {
+            "can_pool": pooled.can_pool,
+            "model": "first-order",
+            "batch_ids": batch_ids,
+            "f_statistic": (
+                round(pooled.f_statistic, 4)
+                if math.isfinite(pooled.f_statistic)
+                else None
+            ),
+            "p_value": round(pooled.p_value, 5),
+            "common_slope": round(pooled.common_slope, 6),
+        }
     if args.out:
         _write_json_report(report, args.out)
 
@@ -645,6 +663,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "compute a BCa bootstrap one-sided 95% lower bound for each "
             "shelf-life estimate using N resamples"
+        ),
+    )
+    q1e.add_argument(
+        "--pool-batches",
+        action="store_true",
+        help=(
+            "run the ICH Q1E common-slope test and report whether the "
+            "batches may be pooled"
         ),
     )
     q1e.add_argument("--out", metavar="FILE", help="write JSON report to FILE")

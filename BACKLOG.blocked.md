@@ -24,3 +24,5 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-11-03)
 - `storage-zone-presets` Add storage-zone presets (I–IVb). Acceptance: `--zone IVb` selects the correct long-term and accelerated conditions; tested. Demo: `python main.py q1e --input examples/stability_data.csv --zone IVb`. Files: main.py, tests/test_cli.py
   blocked: 3 attempts failed (2026-11-03)
+- `intermediate-condition` Support an intermediate storage condition. Acceptance: the intermediate condition is parsed and reported; tested. Demo: `python main.py q1e --input examples/stability_data.csv --condition intermediate`. Files: stability_shelf_life/io.py, tests/test_io.py
+  blocked: 3 attempts failed (2026-11-06)

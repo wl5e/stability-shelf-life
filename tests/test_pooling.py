@@ -1,6 +1,10 @@
 '''Tests for ICH Q1E batch pooling.'''
 
+import json
 import math
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -53,3 +57,28 @@ def test_pool_batches_zero_order_common_slope():
 def test_pool_batches_requires_two_batches():
     with pytest.raises(StabilityError, match='at least two'):
         pool_batches({'A': [0.0, 3.0, 6.0]}, {'A': [100.0, 99.0, 98.0]})
+
+
+def test_cli_pool_batches_reports_decision():
+    root = Path(__file__).resolve().parent.parent
+    res = subprocess.run(
+        [
+            sys.executable,
+            'main.py',
+            'q1e',
+            '--input',
+            'examples/stability_data.csv',
+            '--limit',
+            '90',
+            '--pool-batches',
+            '--json',
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    pooling = report['pooling']
+    assert pooling['batch_ids'] == ['A01', 'B02']
+    assert isinstance(pooling['can_pool'], bool)
