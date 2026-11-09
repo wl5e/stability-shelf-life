@@ -7,7 +7,7 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .model import StabilityError
 
@@ -30,6 +30,7 @@ class AcceleratedData:
     times: List[float]
     temperatures: List[float]
     values: List[float]
+    batch_ids: Optional[List[str]] = None
 
 
 def _open_csv(path: str):
@@ -138,6 +139,8 @@ def load_accelerated_data(path: str) -> AcceleratedData:
         times: List[float] = []
         temperatures: List[float] = []
         values: List[float] = []
+        batch_ids: List[str] = []
+        has_batch = "batch_id" in (reader.fieldnames or [])
         for row_num, row in enumerate(reader, start=2):
             try:
                 temp = float(row["temperature_c"])
@@ -159,10 +162,23 @@ def load_accelerated_data(path: str) -> AcceleratedData:
             if v <= 0:
                 raise StabilityError(f"{path} row {row_num}: potency must be positive")
 
+            if has_batch:
+                batch_id = (row.get("batch_id") or "").strip()
+                if not batch_id:
+                    raise StabilityError(
+                        f"{path} row {row_num}: empty batch_id"
+                    )
+                batch_ids.append(batch_id)
+
             times.append(t)
             temperatures.append(temp)
             values.append(v)
 
     if not times:
         raise StabilityError(f"{path}: no data rows found")
-    return AcceleratedData(times=times, temperatures=temperatures, values=values)
+    return AcceleratedData(
+        times=times,
+        temperatures=temperatures,
+        values=values,
+        batch_ids=batch_ids if has_batch else None,
+    )

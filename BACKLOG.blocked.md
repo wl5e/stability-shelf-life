@@ -26,3 +26,7 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-11-03)
 - `intermediate-condition` Support an intermediate storage condition. Acceptance: the intermediate condition is parsed and reported; tested. Demo: `python main.py q1e --input examples/stability_data.csv --condition intermediate`. Files: stability_shelf_life/io.py, tests/test_io.py
   blocked: 3 attempts failed (2026-11-06)
+- `arrhenius-rate-ci` Add confidence intervals to Arrhenius predictions. Acceptance: the rate CI is finite and narrower with more points; tested. Demo: `python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --json`. Files: stability_shelf_life/model.py, tests/test_model.py
+  blocked: 3 attempts failed (2026-11-09)
+- `arrhenius-zero-order` Support zero-order accelerated kinetics. Acceptance: the zero-order path matches a known rate and is tested. Demo: `python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --model zero`. Files: stability_shelf_life/model.py, tests/test_model.py
+  blocked: 3 attempts failed (2026-11-09)

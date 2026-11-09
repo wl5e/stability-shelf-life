@@ -107,3 +107,34 @@ def test_load_stability_data_rejects_too_few_timepoints(tmp_path):
     )
     with pytest.raises(StabilityError, match="at least 3"):
         load_stability_data(str(p))
+
+
+def test_load_accelerated_data_accepts_optional_batch_id(tmp_path):
+    p = tmp_path / "acc_batch.csv"
+    _write(
+        p,
+        "temperature_c,time_months,potency,batch_id\n"
+        "40,0,100,A01\n40,3,97,A01\n40,6,94,A01\n"
+        "50,0,100,A01\n50,3,94,A01\n50,6,88,A01\n"
+        "40,0,99,B02\n40,3,96,B02\n40,6,93,B02\n"
+        "50,0,99,B02\n50,3,93,B02\n50,6,87,B02\n",
+    )
+    data = load_accelerated_data(str(p))
+    assert data.batch_ids is not None
+    assert len(data.batch_ids) == len(data.times)
+    by_batch = {}
+    for batch_id, t in zip(data.batch_ids, data.times):
+        by_batch.setdefault(batch_id, []).append(t)
+    assert set(by_batch) == {"A01", "B02"}
+    assert by_batch["A01"] == [0.0, 3.0, 6.0, 0.0, 3.0, 6.0]
+
+
+def test_load_accelerated_data_without_batch_id_has_none(tmp_path):
+    p = tmp_path / "acc_no_batch.csv"
+    _write(
+        p,
+        "temperature_c,time_months,potency\n"
+        "40,0,100\n40,3,97\n40,6,94\n",
+    )
+    data = load_accelerated_data(str(p))
+    assert data.batch_ids is None
