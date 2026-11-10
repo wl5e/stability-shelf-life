@@ -20,7 +20,7 @@ import argparse
 import json
 import math
 import sys
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 from stability_shelf_life import (
     StabilityError,
@@ -76,6 +76,26 @@ def _table_cell(value) -> str:
     if isinstance(value, float):
         return f"{value:g}"
     return str(value)
+
+
+def _parse_temperatures(value: Optional[str]) -> Optional[List[float]]:
+    """Parse a comma-separated temperature list from the CLI."""
+    if value is None:
+        return None
+    temperatures: List[float] = []
+    for part in value.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        try:
+            temperatures.append(float(token))
+        except ValueError as exc:
+            raise StabilityError(
+                f"invalid temperature {token!r}; expected a number"
+            ) from exc
+    if not temperatures:
+        raise StabilityError("--temperatures must list at least one temperature")
+    return temperatures
 
 
 def _render_q1e_table(report) -> str:
@@ -535,6 +555,7 @@ def _print_q1e_report(report) -> None:
 
 def _run_arrhenius(args) -> int:
     data = load_accelerated_data(args.input)
+    requested_temperatures = _parse_temperatures(args.temperatures)
     rates_by_temp = degradation_rates_by_temperature(
         data.times, data.temperatures, data.values
     )
@@ -573,6 +594,26 @@ def _run_arrhenius(args) -> int:
         },
     }
 
+    if requested_temperatures is not None:
+        matrix = []
+        for temperature in requested_temperatures:
+            rate = predict_arrhenius_rate(fit, temperature)
+            months = (
+                math.log(args.initial_potency / args.limit) / rate
+                if args.initial_potency > args.limit
+                else None
+            )
+            matrix.append(
+                {
+                    "temperature_c": temperature,
+                    "rate_1_per_month": rate,
+                    "shelf_life_months": (
+                        round(months, 2) if months is not None else None
+                    ),
+                }
+            )
+        report["shelf_life_matrix"] = matrix
+
     if args.out:
         _write_json_report(report, args.out)
 
@@ -602,6 +643,17 @@ def _run_arrhenius(args) -> int:
                 f"Predicted shelf life to {args.limit}%: "
                 f"{shelf_months:.2f} months ({shelf_months / 12.0:.2f} years)"
             )
+        if requested_temperatures is not None:
+            print()
+            print("Shelf-life matrix")
+            print("Temperature  Rate (1/month)  Shelf life (months)")
+            for row in report["shelf_life_matrix"]:
+                shelf = row["shelf_life_months"]
+                shelf_text = "not estimable" if shelf is None else f"{shelf:.2f}"
+                print(
+                    f"{row['temperature_c']:>11.1f}  "
+                    f"{row['rate_1_per_month']:>14.6f}  {shelf_text}"
+                )
     return 0
 
 
@@ -685,6 +737,12 @@ def _build_parser() -> argparse.ArgumentParser:
     arr.add_argument("--input", required=True, help="CSV: temperature_c,time_months,potency")
     arr.add_argument("--storage-temp", type=float, default=25.0, help="long-term storage temperature C")
     arr.add_argument("--limit", type=float, default=90.0, help="acceptance criterion (percent)")
+    arr.add_argument(
+        "--temperatures",
+        default=None,
+        metavar="T1,T2,...",
+        help="comma-separated temperatures (C) for a shelf-life matrix",
+    )
     arr.add_argument("--initial-potency", type=float, default=100.0, help="initial potency (percent)")
     arr.add_argument("--json", action="store_true", help="emit JSON")
     arr.add_argument("--out", metavar="FILE", help="write JSON report to FILE")

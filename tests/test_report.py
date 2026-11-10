@@ -333,3 +333,45 @@ def test_cli_q1e_text_output_names_both_limits():
     )
     assert res.returncode == 0, res.stderr
     assert "Specification limit: 90" in res.stdout
+
+
+def test_cli_arrhenius_outputs_shelf_life_matrix():
+    res = _run_cli(
+        "arrhenius",
+        "--input",
+        "examples/accelerated_data.csv",
+        "--temperatures",
+        "5,25,30",
+        "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    matrix = report["shelf_life_matrix"]
+    assert [row["temperature_c"] for row in matrix] == [5.0, 25.0, 30.0]
+    for row in matrix:
+        assert row["rate_1_per_month"] > 0
+        assert row["shelf_life_months"] is not None
+
+
+def test_render_arrhenius_report_includes_shelf_life_matrix():
+    report = {
+        "rates": [],
+        "arrhenius": {},
+        "prediction": {},
+        "shelf_life_matrix": [
+            {
+                "temperature_c": 5.0,
+                "rate_1_per_month": 0.001,
+                "shelf_life_months": 105.0,
+            },
+            {
+                "temperature_c": 25.0,
+                "rate_1_per_month": 0.003,
+                "shelf_life_months": 35.0,
+            },
+        ],
+    }
+    document = render_html_report(report)
+    assert "Shelf-life matrix" in document
+    assert "105.0" in document
+    assert "35.0" in document

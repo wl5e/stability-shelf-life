@@ -331,6 +331,23 @@ def _render_arrhenius(report: Mapping[str, Any]) -> str:
         "</tbody></table>"
     )
 
+    matrix = report.get("shelf_life_matrix") or []
+    if matrix:
+        rows = "".join(
+            "<tr>"
+            f"<td>{_e(row['temperature_c'])}</td>"
+            f"<td>{_e(row['rate_1_per_month'])}</td>"
+            f"<td>{_e(row['shelf_life_months'])}</td>"
+            "</tr>"
+            for row in matrix
+        )
+        prediction_table += (
+            "<table><caption>Shelf-life matrix</caption>"
+            "<thead><tr><th>Temperature (&#176;C)</th>"
+            "<th>Rate (1/month)</th><th>Shelf life (months)</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>"
+        )
+
     return "\n".join(
         [
             "<h1>Arrhenius stability extrapolation</h1>",
