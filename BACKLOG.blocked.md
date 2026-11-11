@@ -30,3 +30,9 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-11-09)
 - `arrhenius-zero-order` Support zero-order accelerated kinetics. Acceptance: the zero-order path matches a known rate and is tested. Demo: `python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --model zero`. Files: stability_shelf_life/model.py, tests/test_model.py
   blocked: 3 attempts failed (2026-11-09)
+- `overall-batch-shelf-life` Report one regulatory shelf life across batches. Acceptance: the overall value is the minimum lower bound and is tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --overall`. Files: stability_shelf_life/pooling.py, stability_shelf_life/report.py, tests/test_pooling.py
+  blocked: 3 attempts failed (2026-11-11)
+- `q1e-storage-zone-report` Include the storage zone and conditions in the report. Acceptance: the JSON names the zone and both conditions; tested. Demo: `python main.py q1e --input examples/stability_data.csv --zone II --json`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-11)
+- `q1e-data-summary` Add per-batch descriptive statistics before fitting. Acceptance: n, mean, SD, min and max are printed per batch; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-11)
