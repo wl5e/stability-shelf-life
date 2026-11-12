@@ -36,3 +36,9 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-11-11)
 - `q1e-data-summary` Add per-batch descriptive statistics before fitting. Acceptance: n, mean, SD, min and max are printed per batch; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90`. Files: stability_shelf_life/report.py, tests/test_report.py
   blocked: 3 attempts failed (2026-11-11)
+- `q1e-model-comparison` Report AIC/BIC for zero- and first-order fits. Acceptance: both criteria are reported and the selected model is the lower AIC; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/model.py, tests/test_model.py
+  blocked: 3 attempts failed (2026-11-12)
+- `q1e-ci-level` Make the confidence level configurable. Acceptance: `--confidence 0.90` changes the bound and is tested against 0.95. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --confidence 0.90`. Files: stability_shelf_life/model.py, tests/test_model.py
+  blocked: 3 attempts failed (2026-11-12)
+- `q1e-weighted-regression` Add optional regression weights. Acceptance: weights change the fit as expected and are tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --weights 1,2,1,1`. Files: stability_shelf_life/model.py, tests/test_model.py
+  blocked: 3 attempts failed (2026-11-12)
