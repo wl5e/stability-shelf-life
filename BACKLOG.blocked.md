@@ -42,3 +42,5 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-11-12)
 - `q1e-weighted-regression` Add optional regression weights. Acceptance: weights change the fit as expected and are tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --weights 1,2,1,1`. Files: stability_shelf_life/model.py, tests/test_model.py
   blocked: 3 attempts failed (2026-11-12)
+- `q1e-lack-of-fit` Add a lack-of-fit test for the kinetic model. Acceptance: a curved synthetic series is flagged and a linear one is not; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics`. Files: stability_shelf_life/model.py, tests/test_model.py
+  blocked: 3 attempts failed (2026-11-13)

@@ -13,6 +13,8 @@ from __future__ import annotations
 import html
 from typing import Any, List, Mapping
 
+from .io import UNITS
+
 _CSS = """
 :root { color-scheme: light; }
 * { box-sizing: border-box; }
@@ -249,6 +251,8 @@ def _render_q1e(report: Mapping[str, Any]) -> str:
     sections: List[str] = [
         "<h1>ICH Q1E stability analysis</h1>",
         f'<p class="subtitle">{subtitle}</p>',
+        f'<p class="subtitle">Units: time in {_e(UNITS["time"])}, '
+        f'potency in {_e(UNITS["potency"])}</p>',
     ]
 
     for entry in report.get("batches", []):
@@ -351,6 +355,9 @@ def _render_arrhenius(report: Mapping[str, Any]) -> str:
     return "\n".join(
         [
             "<h1>Arrhenius stability extrapolation</h1>",
+            f'<p class="subtitle">Units: time in {_e(UNITS["time"])}, '
+            f'potency in {_e(UNITS["potency"])}, '
+            f'temperature in {_e(UNITS["temperature"])}</p>',
             rates_table,
             arrhenius_table,
             prediction_table,

@@ -3,6 +3,7 @@
 import pytest
 
 from stability_shelf_life.io import (
+    UNITS,
     load_accelerated_data,
     load_stability_data,
 )
@@ -138,3 +139,19 @@ def test_load_accelerated_data_without_batch_id_has_none(tmp_path):
     )
     data = load_accelerated_data(str(p))
     assert data.batch_ids is None
+
+
+def test_units_name_months_percent_temperature():
+    assert UNITS["time"] == "months"
+    assert UNITS["potency"] == "percent"
+    assert UNITS["temperature"] == "°C"
+
+
+def test_report_names_units():
+    from stability_shelf_life.report import render_html_report
+
+    document = render_html_report(
+        {"limit": 90.0, "batches": [], "slope_difference": []}
+    )
+    assert "months" in document
+    assert "percent" in document

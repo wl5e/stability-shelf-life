@@ -18,6 +18,15 @@ MIN_TIMEPOINTS_PER_BATCH = 3
 MIN_BATCHES = 1
 
 
+#: Units encoded in the stability CSV column names, carried through to the
+#: rendered report so every quantity is labelled unambiguously.
+UNITS: Dict[str, str] = {
+    "time": "months",
+    "potency": "percent",
+    "temperature": "°C",
+}
+
+
 @dataclass(frozen=True)
 class StabilityBatch:
     batch_id: str
