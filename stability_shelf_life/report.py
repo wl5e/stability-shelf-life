@@ -15,6 +15,10 @@ from typing import Any, List, Mapping
 
 from .io import UNITS
 
+#: Version of the JSON report schema emitted by the CLI.  Bump when the
+#: serialised report structure changes in a backward-incompatible way.
+SCHEMA_VERSION = "1.0"
+
 _CSS = """
 :root { color-scheme: light; }
 * { box-sizing: border-box; }

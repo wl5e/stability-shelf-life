@@ -44,7 +44,7 @@ from stability_shelf_life.model import (
     slope_difference_test,
 )
 from stability_shelf_life.ascii_plot import band_point_series
-from stability_shelf_life.report import render_html_report
+from stability_shelf_life.report import SCHEMA_VERSION, render_html_report
 
 
 def _write_json_report(report, output_path: str) -> None:
@@ -244,6 +244,7 @@ def _run_q1e(args) -> int:
         raise StabilityError("--bootstrap must be at least 2")
 
     report = {
+        "schema_version": SCHEMA_VERSION,
         "limit": limits[0],
         "limits": limits,
         "release_limit": args.release_limit,
@@ -570,6 +571,7 @@ def _run_arrhenius(args) -> int:
     )
 
     report = {
+        "schema_version": SCHEMA_VERSION,
         "rates": [
             {
                 "temperature_c": t,

@@ -375,3 +375,35 @@ def test_render_arrhenius_report_includes_shelf_life_matrix():
     assert "Shelf-life matrix" in document
     assert "105.0" in document
     assert "35.0" in document
+
+
+def test_cli_q1e_json_includes_schema_version():
+    from stability_shelf_life.report import SCHEMA_VERSION
+
+    res = _run_cli(
+        "q1e",
+        "--input",
+        "examples/stability_data.csv",
+        "--limit",
+        "90",
+        "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    assert report["schema_version"] == SCHEMA_VERSION
+
+
+def test_cli_arrhenius_json_includes_schema_version():
+    from stability_shelf_life.report import SCHEMA_VERSION
+
+    res = _run_cli(
+        "arrhenius",
+        "--input",
+        "examples/accelerated_data.csv",
+        "--storage-temp",
+        "25",
+        "--json",
+    )
+    assert res.returncode == 0, res.stderr
+    report = json.loads(res.stdout)
+    assert report["schema_version"] == SCHEMA_VERSION

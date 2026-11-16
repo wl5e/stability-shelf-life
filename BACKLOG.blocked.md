@@ -44,3 +44,7 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-11-12)
 - `q1e-lack-of-fit` Add a lack-of-fit test for the kinetic model. Acceptance: a curved synthetic series is flagged and a linear one is not; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics`. Files: stability_shelf_life/model.py, tests/test_model.py
   blocked: 3 attempts failed (2026-11-13)
+- `q1e-locale-decimals` Accept comma decimal separators. Acceptance: a comma-decimal CSV loads correctly and is tested. Demo: `python main.py q1e --input examples/stability_data_comma.csv --limit 90`. Files: stability_shelf_life/io.py, tests/test_io.py
+  blocked: 3 attempts failed (2026-11-16)
+- `audit-metadata` Add audit metadata to every JSON report. Acceptance: version, timestamp, input hash and CLI parameters are present; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-16)
