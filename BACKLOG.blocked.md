@@ -48,3 +48,9 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-11-16)
 - `audit-metadata` Add audit metadata to every JSON report. Acceptance: version, timestamp, input hash and CLI parameters are present; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --json`. Files: stability_shelf_life/report.py, tests/test_report.py
   blocked: 3 attempts failed (2026-11-16)
+- `markdown-export` Add `--format markdown`. Acceptance: the report renders a valid Markdown table and is tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --format markdown`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-17)
+- `csv-export` Add `--format csv`. Acceptance: the report emits one row per batch with the expected columns; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --format csv`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-17)
+- `html-provenance` Add provenance to the HTML report. Acceptance: the HTML names the tool version, input and parameters; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --format html`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-17)
