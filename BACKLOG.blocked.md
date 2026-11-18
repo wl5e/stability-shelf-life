@@ -54,3 +54,9 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-11-17)
 - `html-provenance` Add provenance to the HTML report. Acceptance: the HTML names the tool version, input and parameters; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --format html`. Files: stability_shelf_life/report.py, tests/test_report.py
   blocked: 3 attempts failed (2026-11-17)
+- `arrhenius-table` Add an Arrhenius summary table. Acceptance: the table lists temperature, rate and predicted shelf life; tested. Demo: `python main.py arrhenius --input examples/accelerated_data.csv --storage-temp 25 --format markdown`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-18)
+- `q1e-table-provenance` Add provenance to the Q1A/Q1E summary table. Acceptance: the table names the source file and parameters; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --format markdown`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-18)
+- `report-diagnostics` Include residual diagnostics in every output format. Acceptance: text, JSON and Markdown carry the diagnostics; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics --json`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-18)
