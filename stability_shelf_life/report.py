@@ -266,12 +266,26 @@ def _render_q1e(report: Mapping[str, Any]) -> str:
                 "shelf life is not estimable.</p>"
             )
         else:
+            bootstrap_bound = next(
+                (
+                    item.get("bootstrap_lower_95_months")
+                    for item in entry.get("shelf_life_by_limit") or []
+                    if item.get("bootstrap_lower_95_months") is not None
+                ),
+                None,
+            )
+            bootstrap_sentence = (
+                f" Bootstrap lower bound {_e(bootstrap_bound)} months."
+                if bootstrap_bound is not None
+                else ""
+            )
             verdict = (
                 "<p>Shelf life: "
                 f"<strong>{_e(entry['shelf_life_months'])} months</strong> "
                 f"(best model: {_e(entry['best_model'])}, one-sided 95% "
                 f"lower bound "
-                f"{_e(entry['shelf_life_lower_95_months'])} months).</p>"
+                f"{_e(entry['shelf_life_lower_95_months'])} months)."
+                f"{bootstrap_sentence}</p>"
             )
         sections.append(
             f'<h2>Batch {_e(entry["batch_id"])}</h2>'

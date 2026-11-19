@@ -407,3 +407,30 @@ def test_cli_arrhenius_json_includes_schema_version():
     assert res.returncode == 0, res.stderr
     report = json.loads(res.stdout)
     assert report["schema_version"] == SCHEMA_VERSION
+
+
+def test_render_q1e_report_verdict_includes_bootstrap_bound():
+    report = {
+        "limit": 90.0,
+        "batches": [
+            {
+                "batch_id": "A01",
+                "n_points": 5,
+                "best_model": "first-order",
+                "shelf_life_months": 24.35,
+                "shelf_life_lower_95_months": 21.87,
+                "shelf_life_by_limit": [
+                    {
+                        "limit": 90.0,
+                        "shelf_life_months": 24.35,
+                        "shelf_life_lower_95_months": 21.87,
+                        "bootstrap_lower_95_months": 20.5,
+                    }
+                ],
+                "models": [],
+            }
+        ],
+        "slope_difference": [],
+    }
+    document = render_html_report(report)
+    assert "Bootstrap lower bound 20.5 months." in document

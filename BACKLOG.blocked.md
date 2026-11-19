@@ -60,3 +60,7 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-11-18)
 - `report-diagnostics` Include residual diagnostics in every output format. Acceptance: text, JSON and Markdown carry the diagnostics; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics --json`. Files: stability_shelf_life/report.py, tests/test_report.py
   blocked: 3 attempts failed (2026-11-18)
+- `report-outliers` Include outlier flags in every output format. Acceptance: flagged points appear in text, JSON and Markdown; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --diagnostics --json`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-19)
+- `report-pooling` Include the pooling section in every output format. Acceptance: the pooled decision appears in text, JSON and Markdown; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --pool-batches --json`. Files: stability_shelf_life/report.py, tests/test_report.py
+  blocked: 3 attempts failed (2026-11-19)
