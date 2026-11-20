@@ -64,3 +64,5 @@ back to BACKLOG.md to retry.
   blocked: 3 attempts failed (2026-11-19)
 - `report-pooling` Include the pooling section in every output format. Acceptance: the pooled decision appears in text, JSON and Markdown; tested. Demo: `python main.py q1e --input examples/stability_data.csv --limit 90 --pool-batches --json`. Files: stability_shelf_life/report.py, tests/test_report.py
   blocked: 3 attempts failed (2026-11-19)
+- `py-typed` Add the `py.typed` marker. Acceptance: the package ships `py.typed` and the packaging test checks it. Demo: `python -c "import stability_shelf_life, pathlib; print(pathlib.Path(stability_shelf_life.__file__).with_name('py.typed').exists())"`. Files: pyproject.toml, stability_shelf_life/py.typed
+  blocked: 3 attempts failed (2026-11-20)
